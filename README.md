@@ -65,6 +65,13 @@ st.write("Contenido del módulo...")
 - **Operaciones Relacionales**: A > B, A < B, A == B
 - **Componentes Conexas**: Análisis con conectividad 4 u 8
 
+### 03 - Pseudocolor
+- **Colormaps OpenCV**: JET, HOT, OCEAN, BONE, PINK, PARULA, TURBO
+- **Colormap Personalizado**: Pastel con ajustes de brillo
+- **Corrección Gamma**: Pre-procesado de luminancia
+- **Ajustes HSV**: Saturación, valor y mezcla con grises
+- **Exportación**: Descarga individual, comparativa y ZIP completo
+
 ## 🛠️ Requisitos
 
 - Python 3.12+
