@@ -76,10 +76,6 @@ with st.sidebar:
     uploaded_A = st.file_uploader("Imagen A", type=["jpg", "jpeg", "png", "bmp", "tiff"], key="img_a")
     uploaded_B = st.file_uploader("Imagen B", type=["jpg", "jpeg", "png", "bmp", "tiff"], key="img_b")
     
-    if st.button("Intercambiar A ↔ B"):
-        if 'imgA' in st.session_state and 'imgB' in st.session_state:
-            st.session_state.imgA, st.session_state.imgB = st.session_state.imgB, st.session_state.imgA
-            st.rerun()
     
     st.markdown("---")
     
@@ -94,11 +90,19 @@ with st.sidebar:
     cc_source = st.radio("Fuente", ["A", "B", "Resultado"])
     cc_conn = st.radio("Conectividad", [4, 8], index=1)
 
-# Cargar imágenes en session_state
+# Cargar imágenes en session_state solo si cambia el archivo
+# Guardar el ID del archivo para detectar cambios
 if uploaded_A is not None:
-    st.session_state.imgA = load_image(uploaded_A)
+    file_id_a = f"{uploaded_A.name}_{uploaded_A.size}"
+    if 'file_id_a' not in st.session_state or st.session_state.file_id_a != file_id_a:
+        st.session_state.imgA = load_image(uploaded_A)
+        st.session_state.file_id_a = file_id_a
+        
 if uploaded_B is not None:
-    st.session_state.imgB = load_image(uploaded_B)
+    file_id_b = f"{uploaded_B.name}_{uploaded_B.size}"
+    if 'file_id_b' not in st.session_state or st.session_state.file_id_b != file_id_b:
+        st.session_state.imgB = load_image(uploaded_B)
+        st.session_state.file_id_b = file_id_b
 
 imgA = st.session_state.get('imgA', None)
 imgB = st.session_state.get('imgB', None)
@@ -118,6 +122,19 @@ tab1, tab2, tab3, tab4 = st.tabs([
 # ========= TAB 1: OPERACIONES ARITMÉTICAS =========
 with tab1:
     st.subheader("Operaciones Aritméticas")
+    
+    with st.expander("¿Qué son las operaciones aritméticas?", expanded=False):
+        st.markdown("""
+        Las operaciones aritméticas manipulan los valores de píxeles usando matemática básica:
+        
+        - **Suma (+)**: Aumenta el brillo sumando un valor constante o combinando dos imágenes
+        - **Resta (−)**: Reduce el brillo o calcula diferencias entre imágenes
+        - **Multiplicación (×)**: Ajusta el contraste multiplicando por un factor
+        - **Lightest (max)**: Toma el valor más alto entre dos imágenes píxel por píxel
+        - **Darkest (min)**: Toma el valor más bajo entre dos imágenes píxel por píxel
+        
+        **Uso típico**: Ajuste de brillo/contraste, mezcla de imágenes, corrección de iluminación.
+        """)
     
     col1, col2 = st.columns([1, 3])
     with col1:
@@ -210,6 +227,19 @@ with tab1:
 # ========= TAB 2: OPERACIONES LÓGICAS =========
 with tab2:
     st.subheader("Operaciones Lógicas")
+    
+    with st.expander("¿Qué son las operaciones lógicas?", expanded=False):
+        st.markdown("""
+        Las operaciones lógicas trabajan con imágenes **binarizadas** (solo valores 0 o 255):
+        
+        - **AND**: Solo píxeles blancos en AMBAS imágenes permanecen blancos (intersección)
+        - **OR**: Píxeles blancos en CUALQUIERA de las imágenes permanecen blancos (unión)
+        - **XOR**: Píxeles blancos solo donde difieren las imágenes (diferencia simétrica)
+        - **NOT**: Invierte los colores (blanco → negro, negro → blanco)
+        
+        **Uso típico**: Segmentación, extracción de regiones, máscaras, análisis de formas.
+        """)
+    
     st.info("Las operaciones lógicas se aplican sobre imágenes binarizadas")
     
     col1, col2, col3, col4, col5 = st.columns(5)
@@ -263,6 +293,20 @@ with tab2:
 # ========= TAB 3: OPERACIONES RELACIONALES =========
 with tab3:
     st.subheader("Operaciones Relacionales")
+    
+    with st.expander("¿Qué son las operaciones relacionales?", expanded=False):
+        st.markdown("""
+        Las operaciones relacionales **comparan** dos imágenes píxel por píxel:
+        
+        - **A > B**: Píxeles donde A es mayor que B se marcan como blancos
+        - **A < B**: Píxeles donde A es menor que B se marcan como blancos
+        - **A == B**: Píxeles donde A es igual a B se marcan como blancos
+        
+        El resultado es una **imagen binaria** que muestra dónde se cumple la condición.
+        
+        **Uso típico**: Detección de cambios, comparación de imágenes, análisis de diferencias.
+        """)
+    
     st.info("Compara dos imágenes binarizadas píxel a píxel")
     
     col1, col2, col3 = st.columns(3)
@@ -300,6 +344,22 @@ with tab3:
 # ========= TAB 4: COMPONENTES CONEXAS =========
 with tab4:
     st.subheader("Análisis de Componentes Conexas")
+    
+    with st.expander("¿Qué son las componentes conexas?", expanded=False):
+        st.markdown("""
+        Las componentes conexas **identifican y etiquetan regiones conectadas** en una imagen binaria:
+        
+        - **Conectividad 4**: Considera solo vecinos horizontal y vertical (arriba, abajo, izq, der)
+        - **Conectividad 8**: Considera todos los vecinos incluyendo diagonales
+        
+        Cada región conectada (objeto) recibe un **color único**, permitiendo:
+        - Contar objetos automáticamente
+        - Analizar forma y tamaño de cada objeto
+        - Separar regiones individuales
+        
+        **Uso típico**: Conteo de células, detección de objetos, segmentación, análisis de formas.
+        """)
+    
     st.info("Identifica y colorea objetos conectados en una imagen binaria")
     
     if st.button("Etiquetar Componentes", use_container_width=False):
@@ -374,6 +434,47 @@ with col3:
         st.image(result_img, use_container_width=True, clamp=True)
     else:
         st.info("El resultado aparecerá aquí")
+
+# Botones de control debajo de las imágenes
+st.markdown("")
+# Usar 5 columnas para posicionar el botón exactamente entre A y B
+col_a, col_swap_ab, col_b, col_space, col_res = st.columns([2.5, 1, 2.5, 0.5, 3])
+
+with col_a:
+    # Espacio debajo de A
+    st.markdown("")
+
+with col_swap_ab:
+    # Botón de intercambio A ↔ B (exactamente en medio de A y B)
+    if st.button("⇄", use_container_width=True, key="swap_ab_center", help="Intercambiar A ↔ B"):
+        if imgA is not None and imgB is not None:
+            st.session_state.imgA, st.session_state.imgB = st.session_state.imgB, st.session_state.imgA
+            st.rerun()
+        else:
+            st.warning("Carga A y B primero")
+
+with col_b:
+    # Espacio debajo de B
+    st.markdown("")
+
+with col_space:
+    # Espacio entre B y Resultado
+    st.markdown("")
+
+with col_res:
+    # Botones de asignación del resultado (debajo del Resultado)
+    if st.session_state.result is not None:
+        col_r1, col_r2 = st.columns(2)
+        with col_r1:
+            if st.button("← a A", use_container_width=True, key="result_to_a"):
+                st.session_state.imgA = st.session_state.result.copy()
+                st.success("Resultado copiado a A")
+                st.rerun()
+        with col_r2:
+            if st.button("← a B", use_container_width=True, key="result_to_b"):
+                st.session_state.imgB = st.session_state.result.copy()
+                st.success("Resultado copiado a B")
+                st.rerun()
 
 # Opción de descarga
 if st.session_state.result is not None:

@@ -80,6 +80,22 @@ def pastel_colormap(brightness=1.0):
     cols = np.clip(cols, 0.0, 1.0)
     return LinearSegmentedColormap.from_list("PastelMap", cols.tolist(), N=256)
 
+def gothic_colormap():
+    """Mapa de colores gótico: Negro violeta profundo -> Rojo sangre -> Rosado oscuro
+    Con suavizado para transiciones graduales."""
+    colores_gotico = [
+        (0.02, 0.0, 0.03),   # negro violeta profundo
+        (0.15, 0.0, 0.2),    # púrpura oscuro
+        (0.3, 0.0, 0.25),    # vino oscuro
+        (0.5, 0.0, 0.0),     # rojo sangre
+        (0.7, 0.1, 0.1),     # rojo medio
+        (0.9, 0.2, 0.3),     # rojo carmesí
+        (1.0, 0.3, 0.4)      # rosado oscuro final
+    ]
+    
+    # Crear colormap con muchos niveles (N=256) para suavizado
+    return LinearSegmentedColormap.from_list("GothicMap", colores_gotico, N=256)
+
 def apply_matplotlib_colormap(gray, cmap):
     g = gray.astype(np.float32) / 255.0
     rgb = cmap(g)[:, :, :3]
@@ -151,12 +167,37 @@ mix_control = st.sidebar.slider("Mezcla con grises", 0.0, 1.0, 0.90, step=0.05,
                                 help="1.0 = solo color; 0.0 = solo grises")
 
 st.sidebar.markdown("---")
+st.sidebar.caption("Mapa Personalizado • Gótico 🦇")
+use_gothic = st.sidebar.checkbox("Incluir Gótico personalizado", value=True)
+
+st.sidebar.markdown("---")
 grid_cols = st.sidebar.slider("Columnas en la rejilla", 2, 5, 3)
 st.sidebar.caption("La rejilla se adapta a pantalla (layout responsivo).")
 
 # -------------- Header --------------
 st.title("Pseudocolor UI — Práctica 4")
-st.write("Sube una imagen, elige colormaps y ajusta el pastel para que no quede 'lavado'.")
+
+# Descripción educativa
+with st.expander("📚 ¿Qué es el Pseudocolor?", expanded=False):
+    st.markdown("""
+    El **pseudocolor** asigna colores artificiales a imágenes en escala de grises para:
+    
+    - 🎨 **Mejorar la visualización**: Los humanos distinguimos mejor colores que tonos de gris
+    - 🔍 **Destacar características**: Diferentes rangos de intensidad se asignan a colores únicos
+    - 🌡️ **Representar datos**: Común en imágenes térmicas, médicas y científicas
+    
+    **Mapas de color (Colormaps)**:
+    - Cada valor de gris (0-255) se mapea a un color RGB específico
+    - Permiten resaltar detalles que serían difíciles de ver en escala de grises
+    
+    **Controles disponibles**:
+    - Gamma, saturación y brillo para ajustar la apariencia
+    - Múltiples mapas predefinidos de OpenCV
+    - Mapas personalizados (Pastel, Gótico)
+    """)
+
+st.write("Sube una imagen, elige colormaps y ajusta los parámetros para obtener visualizaciones impactantes.")
+
 
 # -------------- Carga / Preproceso --------------
 gray = to_gray_array(file, width=resize_w).copy()
@@ -188,6 +229,19 @@ if use_pastel:
         mix=mix_control
     )
     resultados["Personalizado • Pastel"] = pastel_bgr
+
+# Gótico personalizado (oscuro y dramático)
+if use_gothic:
+    gothic = gothic_colormap()
+    gothic_bgr = apply_matplotlib_colormap(gray, gothic)
+    # El gótico se ve mejor con menos saturación y un poco más oscuro
+    gothic_bgr = tune_and_mix(
+        gothic_bgr, gray,
+        sat=0.95,  # Menos saturado para mantener el tono oscuro
+        val=0.75,  # Valor más bajo para oscurecer
+        mix=0.95   # Casi puro color
+    )
+    resultados["Personalizado • Gótico 🦇"] = gothic_bgr
 
 # -------------- Vista previa --------------
 with st.container():

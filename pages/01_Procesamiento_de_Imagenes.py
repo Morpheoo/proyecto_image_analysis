@@ -225,17 +225,25 @@ def convertir_cmy(rgb_u8: np.ndarray) -> dict:
 
 
 def convertir_hsv(rgb_u8: np.ndarray) -> dict:
-    """HSV: H, S, V usando OpenCV."""
+    """HSV: H, S, V usando OpenCV y reconstrucción RGB."""
     # OpenCV usa BGR, así que convertimos de RGB a BGR primero
     bgr = cv2.cvtColor(rgb_u8, cv2.COLOR_RGB2BGR)
     # Convertir a HSV
     hsv = cv2.cvtColor(bgr, cv2.COLOR_BGR2HSV)
     H, S, V = hsv[..., 0], hsv[..., 1], hsv[..., 2]
+    
+    # Reconstruir RGB desde HSV
+    # Reconvertir HSV a BGR y luego a RGB
+    bgr_reconstruido = cv2.cvtColor(hsv, cv2.COLOR_HSV2BGR)
+    rgb_reconstruido = cv2.cvtColor(bgr_reconstruido, cv2.COLOR_BGR2RGB)
+    
     return {
         "H (matiz)": H,
         "S (saturación)": S,
-        "V (valor)": V
+        "V (valor)": V,
+        "RGB reconstruido": rgb_reconstruido
     }
+
 
 
 # ========= Interfaz de Streamlit =========
@@ -467,7 +475,7 @@ if uploaded_file is not None:
         st.subheader("Modelo HSV")
         hsv = convertir_hsv(rgb)
         
-        col1, col2, col3 = st.columns(3)
+        col1, col2, col3, col4 = st.columns(4)
         with col1:
             st.image(hsv["H (matiz)"], caption="H (matiz)", use_container_width=True, clamp=True)
             st.download_button(
@@ -501,6 +509,17 @@ if uploaded_file is not None:
             )
             if mostrar_histogramas:
                 st.plotly_chart(plot_histogram(hsv["V (valor)"], "Histograma V"), use_container_width=True)
+        with col4:
+            st.image(hsv["RGB reconstruido"], caption="RGB reconstruido", use_container_width=True, clamp=True)
+            st.download_button(
+                label="Descargar RGB Reconstruido",
+                data=imagen_a_bytes(hsv["RGB reconstruido"]),
+                file_name="hsv_rgb_reconstruido.png",
+                mime="image/png",
+                use_container_width=True
+            )
+            if mostrar_histogramas:
+                st.plotly_chart(plot_histogram(hsv["RGB reconstruido"], "Histograma RGB"), use_container_width=True)
 
 else:
     # Instrucciones cuando no hay imagen

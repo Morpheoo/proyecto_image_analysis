@@ -2,8 +2,8 @@ import streamlit as st
 
 # Configuración de la página
 st.set_page_config(
-    page_title="Proyecto Image Analysis",
-    page_icon="🔬",
+    page_title="Spectra - Image Analysis",
+    page_icon="image.png",
     layout="wide",
     initial_sidebar_state="expanded"
 )
@@ -32,7 +32,17 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# Título principal
+# Sidebar con branding Spectra
+with st.sidebar:
+    # Logo y nombre Spectra en el sidebar
+    st.image("image.png", width=180)
+    st.markdown("<h1 style='text-align: center; color: #c4b5fd;'>Spectra</h1>", unsafe_allow_html=True)
+    st.markdown("<p style='text-align: center; color: #9f7aea; font-size: 14px;'>Image Analysis Platform</p>", unsafe_allow_html=True)
+    st.markdown("---")
+    st.markdown("### 🧭 Navegación")
+    st.info("Usa el menú superior para acceder a los diferentes módulos de procesamiento.")
+
+# Título de bienvenida
 st.title("Proyecto de Image Analysis")
 st.markdown("---")
 
@@ -118,8 +128,3 @@ with col2:
 
 # Footer
 st.markdown("---")
-st.markdown("""
-<div style='text-align: center; color: #c4b5fd;'>
-    <p>Proyecto Image Analysis - Semestre 2025</p>
-</div>
-""", unsafe_allow_html=True)
