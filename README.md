@@ -72,6 +72,32 @@ st.write("Contenido del módulo...")
 - **Ajustes HSV**: Saturación, valor y mezcla con grises
 - **Exportación**: Descarga individual, comparativa y ZIP completo
 
+### 04 - Procesamiento en Frecuencia
+- **Parte A - FFT y Filtrado**:
+  - Filtros: Ideal, Gaussiano, Butterworth
+  - Modos: Lowpass (suavizado) y Highpass (bordes)
+  - Visualización de espectro de frecuencia
+  - Reconstrucción por IFFT
+- **Parte B - DCT y Compresión**:
+  - Compresión tipo JPEG por bloques 8×8
+  - Cuantización ajustable (q_factor)
+  - Métricas PSNR para evaluar calidad
+  - Comparación de niveles de compresión
+
+### 05 - Morfología Matemática
+- **Operaciones Básicas**:
+  - Erosión y Dilatación
+  - Apertura (erosión + dilatación)
+  - Cierre (dilatación + erosión)
+  - Método tradicional vs OpenCV
+- **Operaciones Avanzadas**:
+  - Gradiente morfológico (detección de bordes)
+  - Top Hat (resalta regiones brillantes)
+  - Black Hat (resalta regiones oscuras)
+  - Extracción de fronteras
+- **Elementos Estructurantes**: Cuadrado, Cruz, Elipse, Círculo
+- **Soporta**: Imágenes binarias y en escala de grises
+
 ## 🛠️ Requisitos
 
 - Python 3.12+
