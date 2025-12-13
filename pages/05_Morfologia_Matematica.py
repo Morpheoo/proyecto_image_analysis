@@ -16,6 +16,25 @@ st.set_page_config(
     layout="wide"
 )
 
+# Estilo morado con degradado
+st.markdown("""
+<style>
+    .stApp {
+        background: linear-gradient(135deg, #1a0b2e 0%, #2d1b4e 50%, #16213e 100%);
+    }
+    [data-testid="stSidebar"] {
+        background: linear-gradient(180deg, #0f0324 0%, #1a0b2e 100%);
+    }
+    .stMarkdown, .stText, p, h1, h2, h3, label {
+        color: #ede9fe !important;
+    }
+    .stButton > button {
+        background: linear-gradient(90deg, #6b46c1 0%, #9f7aea 100%);
+        color: white;
+    }
+</style>
+""", unsafe_allow_html=True)
+
 # ========= Funciones auxiliares =========
 def cargar_imagen(uploaded_file, modo='binaria'):
     """Carga imagen en modo binario o escala de grises."""

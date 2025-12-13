@@ -29,6 +29,20 @@ h1, h2, h3 {letter-spacing: .3px;}
   border-radius: 14px;
   padding: 14px;
 }
+/* Fondo morado con degradado */
+.stApp {
+    background: linear-gradient(135deg, #1a0b2e 0%, #2d1b4e 50%, #16213e 100%);
+}
+[data-testid="stSidebar"] {
+    background: linear-gradient(180deg, #0f0324 0%, #1a0b2e 100%);
+}
+.stMarkdown, .stText, p, h1, h2, h3, label {
+    color: #ede9fe !important;
+}
+.stButton > button {
+    background: linear-gradient(90deg, #6b46c1 0%, #9f7aea 100%);
+    color: white;
+}
 </style>
 """, unsafe_allow_html=True)
 
