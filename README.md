@@ -25,8 +25,11 @@ proyecto_image_analysis/
 │
 ├── Home.py                 # Página principal
 ├── pages/                  # Páginas adicionales (módulos del semestre)
+│   ├── 01_Procesamiento_de_Imagenes.py
+│   ├── 02_Operaciones_sobre_Imagenes.py
 │   └── ...
 ├── requirements.txt        # Dependencias del proyecto
+├── .gitignore             # Archivos ignorados por Git
 └── README.md              # Este archivo
 ```
 
@@ -35,7 +38,7 @@ proyecto_image_analysis/
 Para agregar un nuevo programa al proyecto:
 
 1. Crea un archivo `.py` en la carpeta `pages/`
-2. Nómbralo con el formato: `01_Nombre_del_Modulo.py`
+2. Nómbralo con el formato: `03_Nombre_del_Modulo.py`
 3. El número al inicio define el orden en el menú lateral
 4. El archivo aparecerá automáticamente en el menú de navegación
 
@@ -49,7 +52,28 @@ st.write("Contenido del módulo...")
 
 ## 📚 Módulos Incluidos
 
-_Los módulos se irán agregando conforme se complete el semestre_
+### 01 - Procesamiento de Imágenes
+- Conversión a múltiples modelos de color (RGB, YIQ, CMY, HSV)
+- Separación de canales RGB con realce de color
+- Escala de grises (BT.601)
+- Binarización con umbral ajustable
+- Visualización de histogramas
+
+### 02 - Operaciones sobre Imágenes
+- **Operaciones Aritméticas**: Suma, resta, multiplicación, lightest, darkest
+- **Operaciones Lógicas**: AND, OR, XOR, NOT
+- **Operaciones Relacionales**: A > B, A < B, A == B
+- **Componentes Conexas**: Análisis con conectividad 4 u 8
+
+## 🛠️ Requisitos
+
+- Python 3.12+
+- Streamlit
+- OpenCV (opencv-python)
+- NumPy
+- Pandas
+- Matplotlib
+- Pillow
 
 ---
 
