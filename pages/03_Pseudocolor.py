@@ -118,7 +118,7 @@ def tune_and_mix(bgr, gray, sat=1.0, val=1.0, mix=1.0):
     return out
 
 # -------------- Sidebar (controles) --------------
-st.sidebar.title("⚙️ Controles")
+st.sidebar.title("Controles")
 file = st.sidebar.file_uploader("Cargar imagen (cualquier formato)", type=None)
 resize_w = st.sidebar.slider("Ancho de trabajo (px)", 256, 2048, 768, step=64)
 gamma = st.sidebar.slider("Gamma (pre-procesado)", 0.20, 3.00, 1.00, step=0.05)
@@ -155,7 +155,7 @@ grid_cols = st.sidebar.slider("Columnas en la rejilla", 2, 5, 3)
 st.sidebar.caption("La rejilla se adapta a pantalla (layout responsivo).")
 
 # -------------- Header --------------
-st.title("🎨 Pseudocolor UI — Práctica 4")
+st.title("Pseudocolor UI — Práctica 4")
 st.write("Sube una imagen, elige colormaps y ajusta el pastel para que no quede 'lavado'.")
 
 # -------------- Carga / Preproceso --------------
@@ -199,7 +199,7 @@ with st.container():
             st.subheader("Escala de grises")
             st.image(gray, clamp=True, use_container_width=True)
             st.download_button(
-                "⬇️ Descargar (PNG)",
+                "Descargar (PNG)",
                 data=gray_to_png_bytes(gray),
                 file_name=f"EscalaGrises_{ts}.png",
                 mime="image/png",
@@ -215,7 +215,7 @@ with st.container():
             rgb = cv2.cvtColor(resultados[name], cv2.COLOR_BGR2RGB)
             st.image(rgb, use_container_width=True)
             st.download_button(
-                "⬇️ Descargar (PNG)",
+                "Descargar (PNG)",
                 data=bgr_to_png_bytes(resultados[name]),
                 file_name=f"{name.replace(' • ', '_').replace(' ', '')}_{ts}.png",
                 mime="image/png",
@@ -224,7 +224,7 @@ with st.container():
 
 # -------------- Comparativa y ZIP (con padding por fila) --------------
 with st.container():
-    st.markdown("### 📦 Exportar todo")
+    st.markdown("### Exportar todo")
 
     thumbs = []
     labels = []
@@ -288,7 +288,7 @@ with st.container():
         comp_pil.save(buf_comp, format="PNG")
         buf_comp.seek(0)
         st.download_button(
-            "⬇️ Descargar comparativa (PNG)",
+            "Descargar comparativa (PNG)",
             data=buf_comp,
             file_name=f"Comparativa_{ts}.png",
             mime="image/png",
@@ -310,7 +310,7 @@ with st.container():
     zip_buf.seek(0)
 
     st.download_button(
-        "⬇️ Descargar TODO (.zip)",
+        "Descargar TODO (.zip)",
         data=zip_buf,
         file_name=f"Pseudocolor_Resultados_{ts}.zip",
         mime="application/zip",
@@ -318,7 +318,7 @@ with st.container():
     )
 
 # -------------- Footer --------------
-with st.expander("ℹ️ Notas y tips"):
+with st.expander("Notas y tips"):
     st.markdown("""
 - **Gamma** (pre) modifica la luminancia de entrada antes del pseudocolor.
 - **Pastel • Brightness** (<1 oscurece) evita que el pastel quede blanco.

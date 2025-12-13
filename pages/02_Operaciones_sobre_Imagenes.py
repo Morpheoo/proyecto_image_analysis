@@ -12,7 +12,7 @@ import matplotlib.pyplot as plt
 # ========= Configuración de página =========
 st.set_page_config(
     page_title="Operaciones sobre Imágenes",
-    page_icon="🔢",
+    page_icon="📊",
     layout="wide"
 )
 
@@ -63,20 +63,20 @@ def load_image(uploaded_file):
     return np.array(pil_image)
 
 # ========= Interfaz de Streamlit =========
-st.title("🔢 Operaciones sobre Imágenes")
+st.title("Operaciones sobre Imágenes")
 st.markdown("### Aritméticas, Lógicas, Relacionales y Componentes Conexas")
 st.markdown("---")
 
 # ========= Sidebar para controles =========
 with st.sidebar:
-    st.header("⚙️ Configuración")
+    st.header("Configuración")
     
     # Upload de imágenes
-    st.subheader("📁 Cargar Imágenes")
+    st.subheader("Cargar Imágenes")
     uploaded_A = st.file_uploader("Imagen A", type=["jpg", "jpeg", "png", "bmp", "tiff"], key="img_a")
     uploaded_B = st.file_uploader("Imagen B", type=["jpg", "jpeg", "png", "bmp", "tiff"], key="img_b")
     
-    if st.button("🔄 Intercambiar A ↔ B"):
+    if st.button("Intercambiar A ↔ B"):
         if 'imgA' in st.session_state and 'imgB' in st.session_state:
             st.session_state.imgA, st.session_state.imgB = st.session_state.imgB, st.session_state.imgA
             st.rerun()
@@ -84,13 +84,13 @@ with st.sidebar:
     st.markdown("---")
     
     # Parámetros
-    st.subheader("🎛️ Parámetros")
+    st.subheader("Parámetros")
     umbral = st.slider("Umbral de binarización", 0, 255, 127)
     escalar = st.slider("Escalar (+/−)", 0, 255, 50)
     factor = st.slider("Factor (×)", 0.1, 3.0, 1.2, 0.1)
     
     st.markdown("---")
-    st.subheader("📊 Componentes Conexas")
+    st.subheader("Componentes Conexas")
     cc_source = st.radio("Fuente", ["A", "B", "Resultado"])
     cc_conn = st.radio("Conectividad", [4, 8], index=1)
 
@@ -109,10 +109,10 @@ if 'result' not in st.session_state:
 
 # ========= Tabs para operaciones =========
 tab1, tab2, tab3, tab4 = st.tabs([
-    "🔢 Aritméticas",
-    "🔲 Lógicas",
-    "⚖️ Relacionales",
-    "🔗 Componentes Conexas"
+    "Aritméticas",
+    "Lógicas",
+    "Relacionales",
+    "Componentes Conexas"
 ])
 
 # ========= TAB 1: OPERACIONES ARITMÉTICAS =========
@@ -129,7 +129,7 @@ with tab1:
         col_a, col_b, col_c, col_d, col_e = st.columns(5)
         
         with col_a:
-            if st.button("➕ Suma", use_container_width=True):
+            if st.button("Suma", use_container_width=True):
                 if destino in ["A", "B"]:
                     img = imgA if destino == "A" else imgB
                     if img is not None:
@@ -149,7 +149,7 @@ with tab1:
                         st.error("Carga ambas imágenes A y B")
         
         with col_b:
-            if st.button("➖ Resta", use_container_width=True):
+            if st.button("Resta", use_container_width=True):
                 if destino in ["A", "B"]:
                     img = imgA if destino == "A" else imgB
                     if img is not None:
@@ -169,7 +169,7 @@ with tab1:
                         st.error("Carga ambas imágenes A y B")
         
         with col_c:
-            if st.button("✖️ Multiplicación", use_container_width=True):
+            if st.button("Multiplicación", use_container_width=True):
                 if destino in ["A", "B"]:
                     img = imgA if destino == "A" else imgB
                     if img is not None:
@@ -190,7 +190,7 @@ with tab1:
                         st.error("Carga ambas imágenes A y B")
         
         with col_d:
-            if st.button("☀️ Lightest", use_container_width=True):
+            if st.button("Lightest", use_container_width=True):
                 if imgA is not None and imgB is not None:
                     a, b = ensure_same_size(imgA, imgB)
                     st.session_state.result = cv2.max(a, b)
@@ -199,7 +199,7 @@ with tab1:
                     st.error("Carga ambas imágenes A y B")
         
         with col_e:
-            if st.button("🌙 Darkest", use_container_width=True):
+            if st.button("Darkest", use_container_width=True):
                 if imgA is not None and imgB is not None:
                     a, b = ensure_same_size(imgA, imgB)
                     st.session_state.result = cv2.min(a, b)
@@ -210,7 +210,7 @@ with tab1:
 # ========= TAB 2: OPERACIONES LÓGICAS =========
 with tab2:
     st.subheader("Operaciones Lógicas")
-    st.info("💡 Las operaciones lógicas se aplican sobre imágenes binarizadas")
+    st.info("Las operaciones lógicas se aplican sobre imágenes binarizadas")
     
     col1, col2, col3, col4, col5 = st.columns(5)
     
@@ -263,7 +263,7 @@ with tab2:
 # ========= TAB 3: OPERACIONES RELACIONALES =========
 with tab3:
     st.subheader("Operaciones Relacionales")
-    st.info("💡 Compara dos imágenes binarizadas píxel a píxel")
+    st.info("Compara dos imágenes binarizadas píxel a píxel")
     
     col1, col2, col3 = st.columns(3)
     
@@ -300,9 +300,9 @@ with tab3:
 # ========= TAB 4: COMPONENTES CONEXAS =========
 with tab4:
     st.subheader("Análisis de Componentes Conexas")
-    st.info("💡 Identifica y colorea objetos conectados en una imagen binaria")
+    st.info("Identifica y colorea objetos conectados en una imagen binaria")
     
-    if st.button("🔍 Etiquetar Componentes", use_container_width=False):
+    if st.button("Etiquetar Componentes", use_container_width=False):
         # Seleccionar imagen fuente
         if cc_source == "A":
             src = imgA
@@ -341,11 +341,11 @@ with tab4:
                 objetos = num_labels - 1
                 st.session_state.result = color_labeled
                 st.session_state.result_name = f"Componentes (conn={cc_conn}) — {objetos} objetos"
-                st.success(f"✅ Se encontraron **{objetos}** componentes conexas")
+                st.success(f"Se encontraron **{objetos}** componentes conexas")
 
 # ========= Visualización de imágenes =========
 st.markdown("---")
-st.subheader("📸 Visualización")
+st.subheader("Visualización")
 
 col1, col2, col3 = st.columns(3)
 
@@ -354,14 +354,14 @@ with col1:
     if imgA is not None:
         st.image(imgA, use_container_width=True, clamp=True)
     else:
-        st.info("👈 Carga una imagen A en el sidebar")
+        st.info("Carga una imagen A en el sidebar")
 
 with col2:
     st.markdown("**Imagen B**")
     if imgB is not None:
         st.image(imgB, use_container_width=True, clamp=True)
     else:
-        st.info("👈 Carga una imagen B en el sidebar")
+        st.info("Carga una imagen B en el sidebar")
 
 with col3:
     result_name = st.session_state.get('result_name', 'Resultado')
@@ -392,7 +392,7 @@ if st.session_state.result is not None:
         result_pil.save(buf, format="PNG")
         
         st.download_button(
-            label="💾 Descargar Resultado",
+            label="Descargar Resultado",
             data=buf.getvalue(),
             file_name="resultado.png",
             mime="image/png",

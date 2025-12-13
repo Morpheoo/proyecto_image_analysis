@@ -199,18 +199,18 @@ def calcular_psnr(original, reconstruida):
     return psnr
 
 # ========= Interfaz de Streamlit =========
-st.title("📊 Procesamiento en el Dominio de la Frecuencia")
+st.title("Procesamiento en el Dominio de la Frecuencia")
 st.markdown("### FFT (Filtrado) y DCT (Compresión tipo JPEG)")
 st.markdown("---")
 
 # Sidebar
 with st.sidebar:
-    st.header("⚙️ Configuración")
+    st.header("Configuración")
     
     uploaded_file = st.file_uploader("Cargar imagen", type=["jpg", "jpeg", "png", "bmp"])
     
     if uploaded_file is None:
-        st.info("💡 Sin imagen = patrón sintético")
+        st.info("Sin imagen = patrón sintético")
     
     img_size = st.slider("Tamaño de imagen", 256, 1024, 512, step=64)
     
@@ -222,7 +222,7 @@ img_original = cargar_imagen_gray(uploaded_file, img_size)
 
 # ========= PARTE A: FFT Y FILTRADO =========
 if modo == "Parte A: FFT y Filtrado":
-    st.subheader("🌊 Transformada de Fourier y Filtrado")
+    st.subheader("Transformada de Fourier y Filtrado")
     
     with st.sidebar:
         st.markdown("---")
@@ -236,7 +236,7 @@ if modo == "Parte A: FFT y Filtrado":
         if filtro_tipo == "butterworth":
             orden = st.slider("Orden (solo Butterworth)", 1, 5, 2)
         
-        if st.button("🔄 Aplicar Filtro", use_container_width=True):
+        if st.button("Aplicar Filtro", use_container_width=True):
             st.session_state.aplicar_fft = True
     
     if st.session_state.get('aplicar_fft', False):
@@ -293,7 +293,7 @@ if modo == "Parte A: FFT y Filtrado":
             plt.close()
         
         # Info técnica
-        with st.expander("ℹ️ Información del Filtrado"):
+        with st.expander("Información del Filtrado"):
             st.markdown(f"""
             - **Filtro**: {filtro_tipo.capitalize()}
             - **Tipo**: {tipo_filtro.upper()}
@@ -307,11 +307,11 @@ if modo == "Parte A: FFT y Filtrado":
             - **Cutoff**: Radio de corte normalizado (0-0.5)
             """)
     else:
-        st.info("👈 Configura los parámetros y presiona **Aplicar Filtro**")
+        st.info("Configura los parámetros y presiona **Aplicar Filtro**")
 
 # ========= PARTE B: DCT Y COMPRESIÓN =========
 else:  # Parte B
-    st.subheader("🗜️ Compresión DCT (tipo JPEG)")
+    st.subheader("Compresión DCT (tipo JPEG)")
     
     with st.sidebar:
         st.markdown("---")
@@ -320,7 +320,7 @@ else:  # Parte B
         q_factor = st.slider("Factor de Calidad (q_factor)", 0.1, 2.0, 0.5, step=0.1,
                             help="Menor valor = mayor compresión (más pérdida)")
         
-        if st.button("🗜️ Comprimir con DCT", use_container_width=True):
+        if st.button("Comprimir con DCT", use_container_width=True):
             st.session_state.aplicar_dct = True
     
     if st.session_state.get('aplicar_dct', False):
@@ -376,7 +376,7 @@ else:  # Parte B
             plt.close()
         
         # Información técnica
-        with st.expander("ℹ️ Sobre la Compresión DCT"):
+        with st.expander("Sobre la Compresión DCT"):
             st.markdown(f"""
             **DCT (Discrete Cosine Transform)**:
             - Divide la imagen en bloques de **8×8 píxeles**
@@ -402,7 +402,7 @@ else:  # Parte B
         
         # Comparación de calidades
         st.markdown("---")
-        st.markdown("### 📊 Comparación de Calidades")
+        st.markdown("### Comparación de Calidades")
         
         if st.button("Generar comparación (q=0.3, 0.6, 1.0)"):
             with st.spinner("Generando comparación..."):
@@ -419,11 +419,11 @@ else:  # Parte B
                         st.image(img_comp_display, clamp=True, use_container_width=True, channels="GRAY")
                         st.caption(f"PSNR: {psnr_comp:.2f} dB")
     else:
-        st.info("👈 Ajusta el **q_factor** y presiona **Comprimir con DCT**")
+        st.info("Ajusta el **q_factor** y presiona **Comprimir con DCT**")
 
 # Footer
 st.markdown("---")
-with st.expander("📚 Objetivos de Aprendizaje"):
+with st.expander("Objetivos de Aprendizaje"):
     st.markdown("""
     ### Parte A - FFT y Filtrado
     - Interpretar el **espectro de frecuencia** de una imagen

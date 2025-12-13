@@ -4,17 +4,15 @@ Procesamiento de Imágenes y Conversión de Modelos de Color
 Adaptado a Streamlit
 """
 import streamlit as st
-from collections import OrderedDict
 from PIL import Image
 import numpy as np
-import matplotlib.pyplot as plt
 import cv2
 import io
 
 # ========= Configuración de página =========
 st.set_page_config(
     page_title="Procesamiento de Imágenes",
-    page_icon="🎨",
+    page_icon="",
     layout="wide"
 )
 
@@ -50,25 +48,96 @@ def to_uint8(img: np.ndarray) -> np.ndarray:
     return ((img - m) / (M - m) * 255.0).astype(np.uint8)
 
 
-def plot_histogram(img_u8: np.ndarray, title: str):
-    """Crea un histograma: 1 curva si es gris, 3 curvas si es RGB."""
-    fig, ax = plt.subplots(figsize=(8, 4))
-    ax.set_title(title)
-    ax.set_xlim(0, 255)
-    ax.set_xlabel("Intensidad")
-    ax.set_ylabel("Frecuencia")
-    ax.grid(True, alpha=.3)
+def imagen_a_bytes(img: np.ndarray, nombre: str = "imagen.png") -> bytes:
+    """Convierte una imagen numpy array a bytes PNG para descarga."""
+    # Asegurar que sea uint8
+    if img.dtype != np.uint8:
+        img = to_uint8(img)
+    
+    # Convertir a PIL Image
+    if img.ndim == 2:
+        # Escala de grises
+        pil_img = Image.fromarray(img, mode='L')
+    else:
+        # RGB
+        pil_img = Image.fromarray(img, mode='RGB')
+    
+    # Convertir a bytes
+    buf = io.BytesIO()
+    pil_img.save(buf, format='PNG')
+    buf.seek(0)
+    return buf.getvalue()
 
+def plot_histogram(img_u8: np.ndarray, title: str):
+    """Crea un histograma interactivo con Plotly: 1 curva si es gris, 3 curvas si es RGB."""
+    import plotly.graph_objects as go
+    
+    fig = go.Figure()
+    
     if img_u8.ndim == 2:  # escala de grises
         hist, bins = np.histogram(img_u8.ravel(), bins=256, range=(0, 255))
-        ax.plot(bins[:-1], hist, color='gray')
+        fig.add_trace(go.Scatter(
+            x=bins[:-1],
+            y=hist,
+            mode='lines',
+            name='Intensidad',
+            line=dict(color='#9CA3AF', width=2),
+            fill='tozeroy',
+            fillcolor='rgba(156, 163, 175, 0.3)',
+            hovertemplate='Nivel: %{x}<br>Frecuencia: %{y}<extra></extra>'
+        ))
     else:  # RGB
-        for i, c in enumerate(("red", "green", "blue")):
+        colors = {
+            'red': ('#EF4444', 'rgba(239, 68, 68, 0.2)'),
+            'green': ('#10B981', 'rgba(16, 185, 129, 0.2)'),
+            'blue': ('#3B82F6', 'rgba(59, 130, 246, 0.2)')
+        }
+        
+        for i, (channel, (line_color, fill_color)) in enumerate(colors.items()):
             hist, bins = np.histogram(img_u8[..., i].ravel(), bins=256, range=(0, 255))
-            ax.plot(bins[:-1], hist, label=c, color=c)
-        ax.legend()
+            fig.add_trace(go.Scatter(
+                x=bins[:-1],
+                y=hist,
+                mode='lines',
+                name=channel.upper(),
+                line=dict(color=line_color, width=2),
+                fill='tozeroy',
+                fillcolor=fill_color,
+                hovertemplate=f'{channel.upper()}<br>Nivel: %{{x}}<br>Frecuencia: %{{y}}<extra></extra>'
+            ))
     
-    plt.tight_layout()
+    # Configuración del layout con tema oscuro
+    fig.update_layout(
+        title=dict(
+            text=title,
+            font=dict(size=16, color='#E5E7EB')
+        ),
+        xaxis=dict(
+            title='Intensidad',
+            range=[0, 255],
+            gridcolor='rgba(255, 255, 255, 0.1)',
+            color='#E5E7EB'
+        ),
+        yaxis=dict(
+            title='Frecuencia',
+            gridcolor='rgba(255, 255, 255, 0.1)',
+            color='#E5E7EB'
+        ),
+        plot_bgcolor='rgba(0, 0, 0, 0)',
+        paper_bgcolor='rgba(0, 0, 0, 0)',
+        hovermode='x unified',
+        legend=dict(
+            orientation="h",
+            yanchor="bottom",
+            y=1.02,
+            xanchor="right",
+            x=1,
+            font=dict(color='#E5E7EB')
+        ),
+        margin=dict(l=10, r=10, t=40, b=10),
+        height=300
+    )
+    
     return fig
 
 
@@ -170,13 +239,13 @@ def convertir_hsv(rgb_u8: np.ndarray) -> dict:
 
 
 # ========= Interfaz de Streamlit =========
-st.title("🎨 Procesamiento de Imágenes")
+st.title("Procesamiento de Imágenes")
 st.markdown("### Conversión de Modelos de Color y Análisis de Histogramas")
 st.markdown("---")
 
 # Sidebar para controles
 with st.sidebar:
-    st.header("⚙️ Configuración")
+    st.header("Configuración")
     
     # Upload de imagen
     uploaded_file = st.file_uploader(
@@ -205,13 +274,13 @@ if uploaded_file is not None:
     
     # Tabs para organizar el contenido
     tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs([
-        "📸 Original",
-        "🔴 RGB Canales",
-        "⚫ Escala Grises",
-        "⬛ Binarización",
-        "🌈 YIQ",
-        "🖨️ CMY",
-        "🎨 HSV"
+        "Original",
+        "RGB Canales",
+        "Escala Grises",
+        "Binarización",
+        "YIQ",
+        "CMY",
+        "HSV"
     ])
     
     # Tab 1: Imagen original
@@ -220,9 +289,16 @@ if uploaded_file is not None:
         col1, col2 = st.columns([2, 1])
         with col1:
             st.image(rgb, caption="Original RGB", use_container_width=True)
+            st.download_button(
+                label="Descargar Original RGB",
+                data=imagen_a_bytes(rgb),
+                file_name="original_rgb.png",
+                mime="image/png",
+                use_container_width=True
+            )
         with col2:
             if mostrar_histogramas:
-                st.pyplot(plot_histogram(rgb, "Histograma RGB"))
+                st.plotly_chart(plot_histogram(rgb, "Histograma RGB"), use_container_width=True)
     
     # Tab 2: Canales RGB
     with tab2:
@@ -232,19 +308,40 @@ if uploaded_file is not None:
         col1, col2, col3 = st.columns(3)
         with col1:
             st.image(r_color, caption="Canal R (realce rojo)", use_container_width=True, clamp=True)
+            st.download_button(
+                label="Descargar Canal R",
+                data=imagen_a_bytes(r_color),
+                file_name="canal_rojo.png",
+                mime="image/png",
+                use_container_width=True
+            )
             if mostrar_histogramas:
                 # Extraer solo el canal rojo para el histograma
-                st.pyplot(plot_histogram(r_color[..., 0], "Histograma Canal R"))
+                st.plotly_chart(plot_histogram(r_color[..., 0], "Histograma Canal R"), use_container_width=True)
         with col2:
             st.image(g_color, caption="Canal G (realce verde)", use_container_width=True, clamp=True)
+            st.download_button(
+                label="Descargar Canal G",
+                data=imagen_a_bytes(g_color),
+                file_name="canal_verde.png",
+                mime="image/png",
+                use_container_width=True
+            )
             if mostrar_histogramas:
                 # Extraer solo el canal verde para el histograma
-                st.pyplot(plot_histogram(g_color[..., 1], "Histograma Canal G"))
+                st.plotly_chart(plot_histogram(g_color[..., 1], "Histograma Canal G"), use_container_width=True)
         with col3:
             st.image(b_color, caption="Canal B (realce azul)", use_container_width=True, clamp=True)
+            st.download_button(
+                label="Descargar Canal B",
+                data=imagen_a_bytes(b_color),
+                file_name="canal_azul.png",
+                mime="image/png",
+                use_container_width=True
+            )
             if mostrar_histogramas:
                 # Extraer solo el canal azul para el histograma
-                st.pyplot(plot_histogram(b_color[..., 2], "Histograma Canal B"))
+                st.plotly_chart(plot_histogram(b_color[..., 2], "Histograma Canal B"), use_container_width=True)
     
     # Tab 3: Escala de grises
     with tab3:
@@ -254,9 +351,16 @@ if uploaded_file is not None:
         col1, col2 = st.columns([2, 1])
         with col1:
             st.image(gray, caption="Escala de grises", use_container_width=True, clamp=True)
+            st.download_button(
+                label="Descargar Escala de Grises",
+                data=imagen_a_bytes(gray),
+                file_name="escala_grises.png",
+                mime="image/png",
+                use_container_width=True
+            )
         with col2:
             if mostrar_histogramas:
-                st.pyplot(plot_histogram(gray, "Histograma Escala de Grises"))
+                st.plotly_chart(plot_histogram(gray, "Histograma Escala de Grises"), use_container_width=True)
     
     # Tab 4: Binarización
     with tab4:
@@ -266,10 +370,17 @@ if uploaded_file is not None:
         col1, col2 = st.columns([2, 1])
         with col1:
             st.image(binaria, caption=f"Binarizada (t={umbral})", use_container_width=True, clamp=True)
+            st.download_button(
+                label="Descargar Binarización",
+                data=imagen_a_bytes(binaria),
+                file_name=f"binarizada_t{umbral}.png",
+                mime="image/png",
+                use_container_width=True
+            )
         with col2:
             if mostrar_histogramas:
-                st.pyplot(plot_histogram(binaria, "Histograma Binarización"))
-            st.info(f"💡 Ajusta el umbral en el sidebar (actual: {umbral})")
+                st.plotly_chart(plot_histogram(binaria, "Histograma Binarización"), use_container_width=True)
+            st.info(f"Ajusta el umbral en el sidebar (actual: {umbral})")
     
     # Tab 5: YIQ
     with tab5:
@@ -279,16 +390,37 @@ if uploaded_file is not None:
         col1, col2, col3 = st.columns(3)
         with col1:
             st.image(yiq["Y (luminancia)"], caption="Y (luminancia)", use_container_width=True, clamp=True)
+            st.download_button(
+                label="Descargar Y",
+                data=imagen_a_bytes(yiq["Y (luminancia)"]),
+                file_name="yiq_luminancia.png",
+                mime="image/png",
+                use_container_width=True
+            )
             if mostrar_histogramas:
-                st.pyplot(plot_histogram(yiq["Y (luminancia)"], "Histograma Y"))
+                st.plotly_chart(plot_histogram(yiq["Y (luminancia)"], "Histograma Y"), use_container_width=True)
         with col2:
             st.image(yiq["I (crominancia)"], caption="I (crominancia)", use_container_width=True, clamp=True)
+            st.download_button(
+                label="Descargar I",
+                data=imagen_a_bytes(yiq["I (crominancia)"]),
+                file_name="yiq_crominancia_i.png",
+                mime="image/png",
+                use_container_width=True
+            )
             if mostrar_histogramas:
-                st.pyplot(plot_histogram(yiq["I (crominancia)"], "Histograma I"))
+                st.plotly_chart(plot_histogram(yiq["I (crominancia)"], "Histograma I"), use_container_width=True)
         with col3:
             st.image(yiq["Q (crominancia)"], caption="Q (crominancia)", use_container_width=True, clamp=True)
+            st.download_button(
+                label="Descargar Q",
+                data=imagen_a_bytes(yiq["Q (crominancia)"]),
+                file_name="yiq_crominancia_q.png",
+                mime="image/png",
+                use_container_width=True
+            )
             if mostrar_histogramas:
-                st.pyplot(plot_histogram(yiq["Q (crominancia)"], "Histograma Q"))
+                st.plotly_chart(plot_histogram(yiq["Q (crominancia)"], "Histograma Q"), use_container_width=True)
     
     # Tab 6: CMY
     with tab6:
@@ -298,16 +430,37 @@ if uploaded_file is not None:
         col1, col2, col3 = st.columns(3)
         with col1:
             st.image(cmy["C (255-R)"], caption="C (255-R)", use_container_width=True, clamp=True)
+            st.download_button(
+                label="Descargar C",
+                data=imagen_a_bytes(cmy["C (255-R)"]),
+                file_name="cmy_cyan.png",
+                mime="image/png",
+                use_container_width=True
+            )
             if mostrar_histogramas:
-                st.pyplot(plot_histogram(cmy["C (255-R)"], "Histograma C"))
+                st.plotly_chart(plot_histogram(cmy["C (255-R)"], "Histograma C"), use_container_width=True)
         with col2:
             st.image(cmy["M (255-G)"], caption="M (255-G)", use_container_width=True, clamp=True)
+            st.download_button(
+                label="Descargar M",
+                data=imagen_a_bytes(cmy["M (255-G)"]),
+                file_name="cmy_magenta.png",
+                mime="image/png",
+                use_container_width=True
+            )
             if mostrar_histogramas:
-                st.pyplot(plot_histogram(cmy["M (255-G)"], "Histograma M"))
+                st.plotly_chart(plot_histogram(cmy["M (255-G)"], "Histograma M"), use_container_width=True)
         with col3:
             st.image(cmy["Y (255-B)"], caption="Y (255-B)", use_container_width=True, clamp=True)
+            st.download_button(
+                label="Descargar Y",
+                data=imagen_a_bytes(cmy["Y (255-B)"]),
+                file_name="cmy_yellow.png",
+                mime="image/png",
+                use_container_width=True
+            )
             if mostrar_histogramas:
-                st.pyplot(plot_histogram(cmy["Y (255-B)"], "Histograma Y"))
+                st.plotly_chart(plot_histogram(cmy["Y (255-B)"], "Histograma Y"), use_container_width=True)
     
     # Tab 7: HSV
     with tab7:
@@ -317,23 +470,44 @@ if uploaded_file is not None:
         col1, col2, col3 = st.columns(3)
         with col1:
             st.image(hsv["H (matiz)"], caption="H (matiz)", use_container_width=True, clamp=True)
+            st.download_button(
+                label="Descargar H",
+                data=imagen_a_bytes(hsv["H (matiz)"]),
+                file_name="hsv_hue.png",
+                mime="image/png",
+                use_container_width=True
+            )
             if mostrar_histogramas:
-                st.pyplot(plot_histogram(hsv["H (matiz)"], "Histograma H"))
+                st.plotly_chart(plot_histogram(hsv["H (matiz)"], "Histograma H"), use_container_width=True)
         with col2:
             st.image(hsv["S (saturación)"], caption="S (saturación)", use_container_width=True, clamp=True)
+            st.download_button(
+                label="Descargar S",
+                data=imagen_a_bytes(hsv["S (saturación)"]),
+                file_name="hsv_saturation.png",
+                mime="image/png",
+                use_container_width=True
+            )
             if mostrar_histogramas:
-                st.pyplot(plot_histogram(hsv["S (saturación)"], "Histograma S"))
+                st.plotly_chart(plot_histogram(hsv["S (saturación)"], "Histograma S"), use_container_width=True)
         with col3:
             st.image(hsv["V (valor)"], caption="V (valor)", use_container_width=True, clamp=True)
+            st.download_button(
+                label="Descargar V",
+                data=imagen_a_bytes(hsv["V (valor)"]),
+                file_name="hsv_value.png",
+                mime="image/png",
+                use_container_width=True
+            )
             if mostrar_histogramas:
-                st.pyplot(plot_histogram(hsv["V (valor)"], "Histograma V"))
+                st.plotly_chart(plot_histogram(hsv["V (valor)"], "Histograma V"), use_container_width=True)
 
 else:
     # Instrucciones cuando no hay imagen
-    st.info("👈 Por favor, sube una imagen usando el sidebar para comenzar el procesamiento")
+    st.info("Por favor, sube una imagen usando el sidebar para comenzar el procesamiento")
     
     st.markdown("""
-    ### 📋 Funcionalidades disponibles:
+    ### Funcionalidades disponibles:
     
     - **Original RGB**: Visualización de la imagen cargada
     - **Canales RGB**: Separación en canales Rojo, Verde y Azul

@@ -137,13 +137,13 @@ def frontera(img, kernel):
     return cv2.subtract(img, erosionada)
 
 # ========= Interfaz de Streamlit =========
-st.title("🔷 Morfología Matemática")
+st.title("Morfología Matemática")
 st.markdown("### Operaciones morfológicas en imágenes binarias y en escala de grises")
 st.markdown("---")
 
 # Sidebar
 with st.sidebar:
-    st.header("⚙️ Configuración")
+    st.header("Configuración")
     
     # Tipo de imagen
     tipo_imagen = st.radio("Tipo de imagen", ["Binaria", "Escala de Grises"])
@@ -156,12 +156,12 @@ with st.sidebar:
     )
     
     if uploaded_file is None:
-        st.info("💡 Sin imagen = patrón sintético")
+        st.info("Sin imagen = patrón sintético")
     
     st.markdown("---")
     
     # Parámetros del kernel
-    st.subheader("🔧 Elemento Estructurante")
+    st.subheader("Elemento Estructurante")
     forma_kernel = st.selectbox("Forma del kernel", ["Cuadrado", "Cruz", "Elipse", "Círculo"])
     tamaño_kernel = st.slider("Tamaño del kernel", 3, 15, 5, step=2)
     iteraciones = st.slider("Iteraciones", 1, 5, 1)
@@ -169,7 +169,7 @@ with st.sidebar:
     st.markdown("---")
     
     # Operación a realizar
-    st.subheader("🎯 Operación")
+    st.subheader("Operación")
     categoria = st.radio("Categoría", ["Básicas", "Avanzadas"])
 
 # Cargar imagen
@@ -191,7 +191,7 @@ with st.sidebar:
 
 # ========= OPERACIONES BÁSICAS =========
 if categoria == "Básicas":
-    st.subheader("🔹 Operaciones Básicas")
+    st.subheader("Operaciones Básicas")
     
     tab1, tab2, tab3, tab4 = st.tabs(["Erosión", "Dilatación", "Apertura", "Cierre"])
     
@@ -213,9 +213,9 @@ if categoria == "Básicas":
         
         # Verificar igualdad
         if np.array_equal(img_erosion_trad, img_erosion_cv):
-            st.success("✅ Ambos métodos producen el mismo resultado")
+            st.success("Ambos métodos producen el mismo resultado")
         
-        with st.expander("💡 Explicación de la Erosión"):
+        with st.expander("Explicación de la Erosión"):
             st.markdown("""
             **Erosión**:
             - Reduce el tamaño de las regiones blancas (foreground)
@@ -246,9 +246,9 @@ if categoria == "Básicas":
             st.image(img_dilate_cv, caption="Dilatación OpenCV", use_container_width=True, clamp=True)
         
         if np.array_equal(img_dilate_trad, img_dilate_cv):
-            st.success("✅ Ambos métodos producen el mismo resultado")
+            st.success("Ambos métodos producen el mismo resultado")
         
-        with st.expander("💡 Explicación de la Dilatación"):
+        with st.expander("Explicación de la Dilatación"):
             st.markdown("""
             **Dilatación**:
             - Incrementa el tamaño de las regiones blancas
@@ -293,9 +293,9 @@ apertura = cv2.morphologyEx(imagen,
                 """, language="python")
         
         if np.array_equal(img_open_trad, img_open_cv):
-            st.success("✅ Ambos métodos producen el mismo resultado")
+            st.success("Ambos métodos producen el mismo resultado")
         
-        with st.expander("💡 Explicación de la Apertura"):
+        with st.expander("Explicación de la Apertura"):
             st.markdown("""
             **Apertura (Opening)**:
             - **Secuencia**: Erosión → Dilatación
@@ -335,9 +335,9 @@ cierre = cv2.morphologyEx(imagen,
                 """, language="python")
         
         if np.array_equal(img_close_trad, img_close_cv):
-            st.success("✅ Ambos métodos producen el mismo resultado")
+            st.success("Ambos métodos producen el mismo resultado")
         
-        with st.expander("💡 Explicación del Cierre"):
+        with st.expander("Explicación del Cierre"):
             st.markdown("""
             **Cierre (Closing)**:
             - **Secuencia**: Dilatación → Erosión
@@ -348,7 +348,7 @@ cierre = cv2.morphologyEx(imagen,
 
 # ========= OPERACIONES AVANZADAS =========
 else:  # Avanzadas
-    st.subheader("🔸 Operaciones Avanzadas")
+    st.subheader("Operaciones Avanzadas")
     
     tab1, tab2, tab3, tab4 = st.tabs(["Gradiente", "Top Hat", "Black Hat", "Frontera"])
     
@@ -372,7 +372,7 @@ else:  # Avanzadas
             img_grad_cv = cv2.morphologyEx(img_original, cv2.MORPH_GRADIENT, kernel)
             st.image(img_grad_cv, caption="Gradiente OpenCV", use_container_width=True, clamp=True)
         
-        with st.expander("💡 Explicación del Gradiente"):
+        with st.expander("Explicación del Gradiente"):
             st.markdown("""
             **Gradiente Morfológico**:
             - **Fórmula**: Dilatación(I) - Erosión(I)
@@ -406,7 +406,7 @@ else:  # Avanzadas
             img_tophat_cv = cv2.morphologyEx(img_original, cv2.MORPH_TOPHAT, kernel)
             st.image(img_tophat_cv, caption="Top Hat OpenCV", use_container_width=True, clamp=True)
         
-        with st.expander("💡 Explicación de Top Hat"):
+        with st.expander("Explicación de Top Hat"):
             st.markdown("""
             **Top Hat (Sombrero de Copa)**:
             - **Fórmula**: Original - Apertura
@@ -439,7 +439,7 @@ else:  # Avanzadas
             img_blackhat_cv = cv2.morphologyEx(img_original, cv2.MORPH_BLACKHAT, kernel)
             st.image(img_blackhat_cv, caption="Black Hat OpenCV", use_container_width=True, clamp=True)
         
-        with st.expander("💡 Explicación de Black Hat"):
+        with st.expander("Explicación de Black Hat"):
             st.markdown("""
             **Black Hat (Bot Hat)**:
             - **Fórmula**: Cierre - Original
@@ -467,7 +467,7 @@ else:  # Avanzadas
             img_frontera = frontera(img_original, kernel)
             st.image(img_frontera, caption="Frontera", use_container_width=True, clamp=True)
         
-        with st.expander("💡 Explicación de la Frontera"):
+        with st.expander("Explicación de la Frontera"):
             st.markdown("""
             **Frontera (Boundary)**:
             - **Fórmula**: Original - Erosión
@@ -482,7 +482,7 @@ else:  # Avanzadas
 
 # ========= Comparación lado a lado =========
 st.markdown("---")
-st.subheader("📊 Original vs Resultado")
+st.subheader("Original vs Resultado")
 
 col_orig, col_res = st.columns(2)
 
@@ -492,11 +492,11 @@ with col_orig:
 
 with col_res:
     st.markdown("**Vista Previa**")
-    st.info("👆 Explora las operaciones en las tabs de arriba")
+    st.info("Explora las operaciones en las tabs de arriba")
 
 # Footer con tabla comparativa
 st.markdown("---")
-with st.expander("📚 Tabla Comparativa: Binaria vs Escala de Grises"):
+with st.expander("Tabla Comparativa: Binaria vs Escala de Grises"):
     st.markdown("""
     | Aspecto | Morfología Binaria | Morfología en Escala de Grises |
     |---------|-------------------|--------------------------------|
@@ -508,17 +508,17 @@ with st.expander("📚 Tabla Comparativa: Binaria vs Escala de Grises"):
     | **Uso típico** | Segmentación, análisis de formas | Suavizado, realce de contraste |
     """)
 
-with st.expander("🎯 Objetivos de Aprendizaje"):
+with st.expander("Objetivos de Aprendizaje"):
     st.markdown("""
     Al completar esta práctica, serás capaz de:
     
-    - ✅ Aplicar **erosión** y **dilatación** en imágenes binarias y grises
-    - ✅ Implementar **apertura** y **cierre** (método tradicional y OpenCV)
-    - ✅ Calcular el **gradiente morfológico** para detección de bordes
-    - ✅ Usar **Top Hat** y **Black Hat** para realce selectivo
-    - ✅ Extraer **fronteras** de objetos
-    - ✅ Diseñar elementos estructurantes apropiados
-    - ✅ Elegir la operación correcta según el problema
+    - Aplicar **erosión** y **dilatación** en imágenes binarias y grises
+    - Implementar **apertura** y **cierre** (método tradicional y OpenCV)
+    - Calcular el **gradiente morfológico** para detección de bordes
+    - Usar **Top Hat** y **Black Hat** para realce selectivo
+    - Extraer **fronteras** de objetos
+    - Diseñar elementos estructurantes apropiados
+    - Elegir la operación correcta según el problema
     """)
 
 st.caption("Morfología Matemática | Image Analysis 2025")

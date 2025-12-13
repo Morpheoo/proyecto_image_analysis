@@ -33,42 +33,42 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # Título principal
-st.title("🔬 Proyecto de Image Analysis")
+st.title("Proyecto de Image Analysis")
 st.markdown("---")
 
 # Bienvenida
 st.markdown("""
-## 👋 ¡Bienvenido!
+## ¡Bienvenido!
 
 Este proyecto recopila las **prácticas de Image Analysis** desarrolladas durante el semestre.
 Cada módulo está implementado como una página interactiva de Streamlit.
 
-### 🎨 Nuevo Diseño
+### Nuevo Diseño
 Ahora con **tema morado con degradado** para una mejor experiencia visual.
 """)
 
 st.markdown("---")
 
 # Módulos disponibles
-st.subheader("📚 Módulos Disponibles")
+st.subheader("Módulos Disponibles")
 
 col1, col2 = st.columns(2)
 
 with col1:
     st.markdown("""
-    #### 🎨 01 - Procesamiento de Imágenes
+    #### 01 - Procesamiento de Imágenes
     - Modelos de color (RGB, YIQ, CMY, HSV)
     - Canales RGB con realce
     - Binarización ajustable
     - Histogramas interactivos
     
-    #### 🔧 02 - Operaciones sobre Imágenes
+    #### 02 - Operaciones sobre Imágenes
     - Operaciones aritméticas
     - Operaciones lógicas
     - Operaciones relacionales
     - Componentes conexas
     
-    #### 🌈 03 - Pseudocolor
+    #### 03 - Pseudocolor
     - 7 Colormaps de OpenCV
     - Colormap pastel personalizado
     - Ajustes HSV avanzados
@@ -77,13 +77,13 @@ with col1:
 
 with col2:
     st.markdown("""
-    #### 📊 04 - Procesamiento en Frecuencia
+    #### 04 - Procesamiento en Frecuencia
     - **FFT**: Filtros Ideal, Gaussiano, Butterworth
     - **DCT**: Compresión tipo JPEG
     - Métricas PSNR
     - Comparación de calidades
     
-    #### 🔷 05 - Morfología Matemática
+    #### 05 - Morfología Matemática
     - Erosión y Dilatación
     - Apertura y Cierre
     - Gradiente morfológico
@@ -94,7 +94,7 @@ with col2:
 st.markdown("---")
 
 # Instrucciones
-st.subheader("🚀 Cómo usar")
+st.subheader("Cómo usar")
 st.markdown("""
 1. **Selecciona un módulo** en el sidebar izquierdo
 2. **Carga una imagen** usando el botón de upload
@@ -102,7 +102,7 @@ st.markdown("""
 4. **Visualiza los resultados** en tiempo real
 5. **Descarga** las imágenes procesadas
 
-💡 **Tip**: Cada módulo incluye explicaciones y ejemplos educativos.
+**Tip**: Cada módulo incluye explicaciones y ejemplos educativos.
 """)
 
 st.markdown("---")
@@ -111,10 +111,10 @@ st.markdown("---")
 col1, col2 = st.columns(2)
 
 with col1:
-    st.info("💡 **Tip**: Cada módulo es independiente y puede ejecutarse por separado.")
+    st.info("**Tip**: Cada módulo es independiente y puede ejecutarse por separado.")
 
 with col2:
-    st.success("✅ Explora los diferentes programas en el menú lateral")
+    st.success("Explora los diferentes programas en el menú lateral")
 
 # Footer
 st.markdown("---")
