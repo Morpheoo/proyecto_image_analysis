@@ -49,3 +49,18 @@ desktop.ini
 
 # Carpeta del proyecto original
 proyecto_image_analysis-main/
+
+# Dataset - muy pesado, no subir
+dataset/
+
+# Fruit quality project - heavy files
+fruit_quality_project/data/
+fruit_quality_project/models/*.pth
+fruit_quality_project/outputs/segmentation_samples/
+fruit_quality_project/outputs/predictions_samples/
+fruit_quality_project/outputs/streamlit_samples/
+fruit_quality_project/outputs/baseline/
+fruit_quality_project/outputs/segmented/
+
+# Virtual environment
+.venv/

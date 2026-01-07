@@ -1,0 +1,47 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environments
+.venv/
+venv/
+ENV/
+env/
+
+# Dataset - DO NOT UPLOAD (very large)
+data/
+dataset/
+
+# Model weights - large files (optional to include)
+models/*.pth
+
+# Outputs - can be regenerated
+outputs/segmentation_samples/
+outputs/predictions_samples/
+outputs/streamlit_samples/
+outputs/baseline/
+outputs/segmented/
+
+# Keep structure but ignore contents
+!outputs/.gitkeep
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Logs
+*.log
+
+# Temporary files
+*.tmp
+*.temp
