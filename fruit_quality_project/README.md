@@ -37,12 +37,42 @@ Este proyecto implementa un pipeline completo para:
 
 ---
 
+## 🎯 Demo Mode (Inference Only)
+
+**No dataset required!** If you already have a trained model, you can run the Streamlit demo directly.
+
+### Quick Start
+
+```bash
+cd fruit_quality_project
+
+# Install dependencies
+pip install -r requirements.txt
+
+# Run the demo
+streamlit run app.py
+```
+
+### Requirements for Demo Mode
+- Trained model at: `models/fruit_quality_baseline.pth`
+- No dataset needed - just upload images to classify
+
+### CLI Inference (Optional)
+```bash
+python -m src.inference --image path/to/fruit.jpg --preprocess none
+python -m src.inference --image path/to/fruit.jpg --preprocess grabcut
+```
+
+---
+
 ## 📁 Estructura del Proyecto
 
 ```
 fruit_quality_project/
 │
-├── data/                      # Dataset (train / test)
+├── models/                    # Modelos entrenados (.pth) ⭐ Required for demo
+│   └── fruit_quality_baseline.pth
+├── data/                      # Dataset (only for training)
 │   ├── train/
 │   │   ├── freshapples/
 │   │   ├── freshbananas/
@@ -53,23 +83,23 @@ fruit_quality_project/
 │   └── test/
 │       └── (misma estructura)
 │
-├── models/                    # Modelos entrenados (.pth)
 ├── outputs/
 │   ├── segmentation_samples/  # Ejemplos de segmentación
 │   ├── predictions_samples/   # Predicciones del modelo
-│   ├── streamlit_samples/     # Evaluaciones desde la app
-│   └── experiment_comparison.txt
+│   └── streamlit_samples/     # Evaluaciones desde la app
 │
 ├── src/
 │   ├── __init__.py
+│   ├── config.py              # Configuration and paths ⭐ NEW
+│   ├── inference.py           # Standalone inference module ⭐ NEW
 │   ├── segmentation.py        # GrabCut + HSV segmentation
 │   ├── dataset.py             # PyTorch Dataset
 │   ├── train.py               # Training pipeline
 │   ├── evaluate.py            # Metrics & evaluation
 │   └── utils.py               # Utilities
 │
-├── main.py                    # Pipeline completo
-├── app.py                     # Streamlit app
+├── main.py                    # Pipeline completo (training)
+├── app.py                     # Streamlit app (demo)
 ├── requirements.txt
 └── README.md
 ```

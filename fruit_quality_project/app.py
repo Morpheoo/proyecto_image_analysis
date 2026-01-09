@@ -1,6 +1,8 @@
 """
-Streamlit application for fruit quality classification.
-Interactive interface for segmentation and quality evaluation.
+Aplicación Streamlit para clasificación de calidad de frutas.
+Interfaz interactiva para segmentación y evaluación de calidad.
+
+Modo Demo: Solo requiere el modelo entrenado, no necesita dataset.
 """
 
 import os
@@ -12,20 +14,20 @@ import streamlit as st
 import numpy as np
 from PIL import Image
 import torch
+import cv2
 
 # Add project root to path
 PROJECT_ROOT = Path(__file__).parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
 from src.segmentation import segment_image
-from src.train import load_model
-from src.dataset import get_transforms, QUALITY_NAMES
-from src.utils import get_device
+from src.inference import load_inference_model, predict, check_model_status, get_device
+from src.config import CLASS_NAMES, DEFAULT_MODEL_PATH, SEGMENTATION_METHODS
 
 
 # Page configuration
 st.set_page_config(
-    page_title="🍎 Fruit Quality Analyzer",
+    page_title="🍎 Analizador de Calidad de Frutas",
     page_icon="🍎",
     layout="wide",
     initial_sidebar_state="expanded"
@@ -66,6 +68,14 @@ st.markdown("""
         text-align: center;
         font-size: 1.5rem;
     }
+    .fruit-type-box {
+        background: linear-gradient(135deg, #667eea, #764ba2);
+        color: white;
+        padding: 15px;
+        border-radius: 10px;
+        text-align: center;
+        margin-top: 10px;
+    }
     .metric-card {
         background: linear-gradient(135deg, #667eea, #764ba2);
         border-radius: 10px;
@@ -77,284 +87,392 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 
-@st.cache_resource
-def load_classification_model(model_path: str, model_name: str = "mobilenetv2"):
-    """Load and cache the classification model."""
-    try:
-        model = load_model(model_path, model_name=model_name)
-        model.eval()
-        return model
-    except Exception as e:
-        st.error(f"Error loading model: {e}")
-        return None
-
-
-def predict_quality(model, image: np.ndarray, device: torch.device) -> dict:
+def detect_fruit_type(image: np.ndarray) -> dict:
     """
-    Predict fruit quality from image.
+    Detecta el tipo de fruta basándose en análisis de color.
     
+    Args:
+        image: Imagen RGB como numpy array
+        
     Returns:
-        Dictionary with prediction, confidence, and probabilities
+        Dictionary con tipo de fruta detectada y confianza
     """
-    transform = get_transforms("test")
+    # Convertir a HSV para análisis de color
+    hsv = cv2.cvtColor(image, cv2.COLOR_RGB2HSV)
     
-    # Convert to PIL and apply transforms
-    pil_image = Image.fromarray(image)
-    img_tensor = transform(pil_image).unsqueeze(0).to(device)
+    # Definir rangos de color para cada fruta
+    # Manzana: predominantemente roja o verde
+    # Banana: predominantemente amarilla
+    # Naranja: predominantemente naranja
     
-    # Inference
-    model = model.to(device)
-    with torch.no_grad():
-        outputs = model(img_tensor)
-        probs = torch.nn.functional.softmax(outputs, dim=1)
-        _, pred = outputs.max(1)
+    # Máscaras para cada color
+    # Rojo (manzana roja)
+    lower_red1 = np.array([0, 70, 50])
+    upper_red1 = np.array([10, 255, 255])
+    lower_red2 = np.array([170, 70, 50])
+    upper_red2 = np.array([180, 255, 255])
+    mask_red = cv2.inRange(hsv, lower_red1, upper_red1) + cv2.inRange(hsv, lower_red2, upper_red2)
     
-    pred_label = pred.item()
-    confidence = probs[0][pred_label].item()
+    # Verde (manzana verde)
+    lower_green = np.array([35, 40, 40])
+    upper_green = np.array([85, 255, 255])
+    mask_green = cv2.inRange(hsv, lower_green, upper_green)
+    
+    # Amarillo (banana)
+    lower_yellow = np.array([20, 100, 100])
+    upper_yellow = np.array([35, 255, 255])
+    mask_yellow = cv2.inRange(hsv, lower_yellow, upper_yellow)
+    
+    # Naranja (naranja)
+    lower_orange = np.array([10, 100, 100])
+    upper_orange = np.array([25, 255, 255])
+    mask_orange = cv2.inRange(hsv, lower_orange, upper_orange)
+    
+    # Marrón (banana madura/podrida o manzana podrida)
+    lower_brown = np.array([10, 50, 20])
+    upper_brown = np.array([30, 200, 150])
+    mask_brown = cv2.inRange(hsv, lower_brown, upper_brown)
+    
+    # Contar píxeles de cada color
+    total_pixels = image.shape[0] * image.shape[1]
+    
+    red_ratio = np.sum(mask_red > 0) / total_pixels
+    green_ratio = np.sum(mask_green > 0) / total_pixels
+    yellow_ratio = np.sum(mask_yellow > 0) / total_pixels
+    orange_ratio = np.sum(mask_orange > 0) / total_pixels
+    brown_ratio = np.sum(mask_brown > 0) / total_pixels
+    
+    # Determinar tipo de fruta
+    scores = {
+        'Manzana 🍎': red_ratio + green_ratio * 0.8,
+        'Banana 🍌': yellow_ratio + brown_ratio * 0.5,
+        'Naranja 🍊': orange_ratio
+    }
+    
+    # Normalizar scores
+    total_score = sum(scores.values())
+    if total_score > 0:
+        confidences = {k: v / total_score for k, v in scores.items()}
+    else:
+        confidences = {k: 0.33 for k in scores.keys()}
+    
+    # Obtener fruta con mayor score
+    detected_fruit = max(scores, key=scores.get)
+    confidence = confidences[detected_fruit]
     
     return {
-        'prediction': QUALITY_NAMES[pred_label],
-        'label_idx': pred_label,
+        'fruit_type': detected_fruit,
         'confidence': confidence,
-        'probabilities': {
-            QUALITY_NAMES[i]: float(probs[0][i]) 
-            for i in range(len(QUALITY_NAMES))
-        }
+        'all_scores': confidences
     }
 
 
-def save_evaluation(image, segmented, result, seg_method, output_dir):
-    """Save evaluation results to streamlit_samples folder."""
+def show_model_status():
+    """Muestra el estado del modelo en el sidebar."""
+    status = check_model_status()
+    
+    if status['model_loadable']:
+        st.sidebar.success("✅ Modelo cargado correctamente")
+        with st.sidebar.expander("📋 Info del Modelo", expanded=False):
+            st.markdown(f"""
+            - **Arquitectura**: MobileNetV2 (PyTorch)
+            - **Archivo**: `{Path(status['model_path']).name}`
+            - **Dispositivo**: {status['device']}
+            - **Clases**: Fresca, Podrida
+            - **Entrada**: 224×224 + normalización ImageNet
+            """)
+            if status['info'] and status['info'].get('val_acc') != 'N/A':
+                st.metric("Precisión de Validación", f"{status['info']['val_acc']:.1f}%")
+    else:
+        st.sidebar.error("❌ Modelo no encontrado")
+        st.sidebar.warning(f"Esperado: `models/fruit_quality_baseline.pth`")
+        if status['error']:
+            st.sidebar.code(status['error'])
+    
+    return status['model_loadable']
+
+
+@st.cache_resource
+def load_classification_model(model_path: str = None):
+    """Carga y cachea el modelo de clasificación."""
+    try:
+        model, device, info = load_inference_model(model_path)
+        return model, device, info
+    except Exception as e:
+        st.error(f"Error al cargar el modelo: {e}")
+        return None, None, None
+
+
+def predict_quality(model, image: np.ndarray, device: torch.device, preprocess: str = None) -> dict:
+    """
+    Predice la calidad de la fruta en la imagen.
+    
+    Returns:
+        Diccionario con predicción, confianza y probabilidades
+    """
+    return predict(model, image, device, preprocess)
+
+
+def save_evaluation(image, segmented, result, fruit_type, seg_method, output_dir):
+    """Guarda los resultados de evaluación en la carpeta streamlit_samples."""
     os.makedirs(output_dir, exist_ok=True)
     
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     prefix = f"{result['prediction'].lower()}_{timestamp}"
     
-    # Save original
+    # Guardar original
     Image.fromarray(image).save(os.path.join(output_dir, f"{prefix}_original.png"))
     
-    # Save segmented
+    # Guardar segmentada
     if segmented is not None:
         Image.fromarray(segmented).save(os.path.join(output_dir, f"{prefix}_segmented.png"))
     
-    # Save result info
+    # Guardar info del resultado
     import json
     result_info = {
         'prediction': result['prediction'],
         'confidence': result['confidence'],
         'probabilities': result['probabilities'],
+        'fruit_type': fruit_type,
         'segmentation_method': seg_method,
         'timestamp': timestamp
     }
-    with open(os.path.join(output_dir, f"{prefix}_result.json"), 'w') as f:
-        json.dump(result_info, f, indent=2)
+    with open(os.path.join(output_dir, f"{prefix}_result.json"), 'w', encoding='utf-8') as f:
+        json.dump(result_info, f, indent=2, ensure_ascii=False)
     
     return prefix
 
 
 def main():
     # Header
-    st.markdown('<h1 class="main-header">🍎 Fruit Quality Analyzer</h1>', unsafe_allow_html=True)
+    st.markdown('<h1 class="main-header">🍎 Analizador de Calidad de Frutas</h1>', unsafe_allow_html=True)
     st.markdown("---")
     
-    # Sidebar - Configuration
+    # Sidebar - Configuración
     with st.sidebar:
-        st.header("⚙️ Configuration")
+        st.header("⚙️ Configuración")
         
-        # Model selection
-        st.subheader("Classification Model")
-        model_type = st.selectbox(
-            "Model Architecture",
-            ["mobilenetv2"],
-            help="Pre-trained model for classification"
-        )
+        # Auto-verificación del modelo
+        model_available = show_model_status()
         
-        use_segmented_model = st.checkbox(
-            "Use segmentation-trained model",
-            value=True,
-            help="Model trained with segmented images"
-        )
+        st.markdown("---")
         
-        model_suffix = "_segmented" if use_segmented_model else "_baseline"
-        model_path = PROJECT_ROOT / "models" / f"fruit_quality{model_suffix}.pth"
-        
-        # Segmentation settings
-        st.subheader("🔍 Segmentation")
+        # Configuración de preprocesamiento
+        st.subheader("🔍 Preprocesamiento")
         seg_method = st.selectbox(
-            "Method",
-            ["GrabCut", "HSV + Morphology"],
-            help="Classical segmentation technique"
+            "Método",
+            ["Ninguno (Original)", "GrabCut", "HSV + Morfología"],
+            help="Selecciona el preprocesamiento: Ninguno para inferencia directa, o segmentación para remover el fondo"
         )
+        
+        # Parámetros de segmentación (solo mostrar si está seleccionado)
+        iterations = 5
+        margin = 10
+        kernel_size = 5
         
         if seg_method == "GrabCut":
-            iterations = st.slider("Iterations", 1, 10, 5)
-            margin = st.slider("Margin", 5, 30, 10)
-        else:
-            kernel_size = st.slider("Kernel Size", 3, 11, 5, step=2)
+            iterations = st.slider("Iteraciones", 1, 10, 5)
+            margin = st.slider("Margen", 5, 30, 10)
+        elif seg_method == "HSV + Morfología":
+            kernel_size = st.slider("Tamaño de Kernel", 3, 11, 5, step=2)
         
-        # Info panel
+        # Panel informativo
         st.markdown("---")
-        st.subheader("📋 Info Panel")
+        st.subheader("📋 Info del Proceso")
         st.markdown(f"""
         <div class="info-box">
-            <b>Segmentation:</b> {seg_method}<br>
-            <b>Model:</b> MobileNetV2<br>
-            <b>Training:</b> {'With segmentation' if use_segmented_model else 'Baseline'}<br>
-            <b>Preprocessing:</b> Resize 224×224, ImageNet normalization
+            <b>Preprocesamiento:</b> {seg_method}<br>
+            <b>Modelo:</b> MobileNetV2 (PyTorch)<br>
+            <b>Entrada:</b> Redimensionar 224×224, normalización ImageNet<br>
+            <b>Clases:</b> Fresca / Podrida
         </div>
         """, unsafe_allow_html=True)
     
-    # Main content
+    # Contenido principal
     col1, col2 = st.columns([1, 2])
     
     with col1:
-        st.subheader("📤 Upload Image")
+        st.subheader("📤 Subir Imagen")
         uploaded_file = st.file_uploader(
-            "Choose a fruit image",
+            "Elige una imagen de fruta",
             type=['jpg', 'jpeg', 'png'],
-            help="Upload a JPG or PNG image of a fruit"
+            help="Sube una imagen JPG o PNG de una fruta"
         )
         
         if uploaded_file is not None:
-            # Load image
+            # Cargar imagen
             image = Image.open(uploaded_file).convert('RGB')
             image_np = np.array(image)
             
-            st.image(image, caption="Original Image", use_container_width=True)
+            st.image(image, caption="Imagen Original", use_container_width=True)
     
     with col2:
         if uploaded_file is not None:
-            st.subheader("🔬 Analysis Results")
+            st.subheader("🔬 Resultados del Análisis")
             
-            # Apply segmentation
-            with st.spinner("Applying segmentation..."):
-                try:
-                    if seg_method == "GrabCut":
-                        seg_result = segment_image(
-                            image_np, 
-                            method="grabcut",
-                            iterations=iterations,
-                            margin=margin
-                        )
-                    else:
-                        seg_result = segment_image(
-                            image_np, 
-                            method="hsv",
-                            kernel_size=kernel_size
-                        )
-                    
-                    segmented = seg_result['segmented']
-                    mask = seg_result['mask']
-                    method_info = seg_result['method_info']
-                    
-                except Exception as e:
-                    st.error(f"Segmentation failed: {e}")
-                    segmented = image_np
-                    mask = np.ones(image_np.shape[:2], dtype=np.uint8) * 255
-                    method_info = "Fallback (no segmentation)"
+            # Manejar preprocesamiento según selección
+            if seg_method == "Ninguno (Original)":
+                # Sin segmentación, usar imagen original
+                segmented = image_np
+                mask = np.ones(image_np.shape[:2], dtype=np.uint8) * 255
+                method_info = "Ninguno - usando imagen original"
+            else:
+                # Aplicar segmentación
+                with st.spinner("Aplicando segmentación..."):
+                    try:
+                        if seg_method == "GrabCut":
+                            seg_result = segment_image(
+                                image_np, 
+                                method="grabcut",
+                                iterations=iterations,
+                                margin=margin
+                            )
+                        else:  # HSV + Morfología
+                            seg_result = segment_image(
+                                image_np, 
+                                method="hsv",
+                                kernel_size=kernel_size
+                            )
+                        
+                        segmented = seg_result['segmented']
+                        mask = seg_result['mask']
+                        method_info = seg_result['method_info']
+                        
+                    except Exception as e:
+                        st.error(f"Error en segmentación: {e}")
+                        segmented = image_np
+                        mask = np.ones(image_np.shape[:2], dtype=np.uint8) * 255
+                        method_info = "Respaldo (sin segmentación)"
             
-            # Display segmentation results
+            # Mostrar resultados de segmentación en 3 columnas
             seg_col1, seg_col2, seg_col3 = st.columns(3)
             
             with seg_col1:
                 st.image(image_np, caption="Original", use_container_width=True)
             
             with seg_col2:
-                # Display mask with colormap
+                # Mostrar máscara
                 mask_display = np.stack([mask, mask, mask], axis=2)
-                st.image(mask_display, caption="Segmentation Mask", use_container_width=True)
+                st.image(mask_display, caption="Máscara", use_container_width=True)
             
             with seg_col3:
-                st.image(segmented, caption="Segmented", use_container_width=True)
+                st.image(segmented, caption="Procesada", use_container_width=True)
             
-            st.info(f"**Segmentation Method:** {method_info}")
+            st.info(f"**Preprocesamiento:** {method_info}")
             
-            # Evaluation button
+            # Botón de evaluación
             st.markdown("---")
             
-            if st.button("🔮 Evaluate Quality", type="primary", use_container_width=True):
-                # Check model exists
-                if not model_path.exists():
-                    st.error(f"""
-                    Model not found at: {model_path}
+            if st.button("🔮 Evaluar Calidad", type="primary", use_container_width=True):
+                if not model_available:
+                    st.error("""
+                    ❌ ¡Modelo no disponible!
                     
-                    Please train the model first by running:
-                    ```
-                    python main.py
-                    ```
+                    Por favor asegúrate de que el modelo existe en:
+                    `models/fruit_quality_baseline.pth`
                     """)
                 else:
-                    with st.spinner("Analyzing fruit quality..."):
-                        # Load model
-                        model = load_classification_model(str(model_path))
+                    with st.spinner("Analizando calidad de la fruta..."):
+                        # Cargar modelo (usando baseline por defecto)
+                        model, device, info = load_classification_model()
                         
                         if model is not None:
-                            device = get_device()
-                            
-                            # Get prediction
+                            # Obtener predicción de calidad
                             result = predict_quality(model, segmented, device)
                             
-                            # Display results
-                            st.markdown("### 📊 Prediction Results")
+                            # Detectar tipo de fruta
+                            fruit_info = detect_fruit_type(image_np)
                             
+                            # Traducir resultado
+                            quality_es = "Fresca" if result['prediction'] == 'Fresh' else "Podrida"
+                            
+                            # Mostrar resultados
+                            st.markdown("### 📊 Resultados de la Predicción")
+                            
+                            # Tipo de fruta detectada
+                            st.markdown(f"""
+                            <div class="fruit-type-box">
+                                <b>Fruta Identificada:</b> {fruit_info['fruit_type']}<br>
+                                <small>Confianza: {fruit_info['confidence']*100:.1f}%</small>
+                            </div>
+                            """, unsafe_allow_html=True)
+                            
+                            st.markdown("<br>", unsafe_allow_html=True)
+                            
+                            # Calidad
                             pred_class = "prediction-fresh" if result['prediction'] == 'Fresh' else "prediction-rotten"
                             emoji = "✅" if result['prediction'] == 'Fresh' else "⚠️"
                             
                             st.markdown(f"""
                             <div class="{pred_class}">
-                                {emoji} <b>{result['prediction']}</b><br>
-                                Confidence: {result['confidence']*100:.1f}%
+                                {emoji} <b>Calidad: {quality_es}</b><br>
+                                Confianza: {result['confidence']*100:.1f}%
                             </div>
                             """, unsafe_allow_html=True)
                             
-                            # Probability breakdown
-                            st.markdown("#### Probability Distribution")
+                            # Distribución de probabilidades
+                            st.markdown("#### Distribución de Probabilidad")
                             prob_col1, prob_col2 = st.columns(2)
                             
                             with prob_col1:
                                 st.metric(
-                                    "🍏 Fresh",
+                                    "🍏 Fresca",
                                     f"{result['probabilities']['Fresh']*100:.1f}%"
                                 )
                             
                             with prob_col2:
                                 st.metric(
-                                    "🍂 Rotten",
+                                    "🍂 Podrida",
                                     f"{result['probabilities']['Rotten']*100:.1f}%"
                                 )
                             
-                            # Progress bar
+                            # Barra de progreso
                             st.progress(result['probabilities']['Fresh'])
                             
-                            # Save evaluation
+                            # Mostrar detalles de detección de fruta
+                            with st.expander("🔎 Detalles de detección de tipo de fruta"):
+                                for fruit, score in fruit_info['all_scores'].items():
+                                    st.write(f"{fruit}: {score*100:.1f}%")
+                            
+                            # Guardar evaluación
                             output_dir = PROJECT_ROOT / "outputs" / "streamlit_samples"
                             saved = save_evaluation(
-                                image_np, segmented, result, 
+                                image_np, segmented, result,
+                                fruit_info['fruit_type'],
                                 seg_method, str(output_dir)
                             )
-                            st.success(f"Evaluation saved: {saved}")
+                            st.success(f"✅ Evaluación guardada: {saved}")
         
         else:
-            st.info("👈 Upload an image to start the analysis")
+            st.info("👈 Sube una imagen para comenzar el análisis")
             
-            # Show sample info
+            # Mostrar instrucciones
             st.markdown("""
-            ### How to use:
-            1. **Upload** a fruit image (apple, banana, or orange)
-            2. **Select** segmentation method in the sidebar
-            3. **Click** "Evaluate Quality" to get the prediction
+            ### Cómo usar:
+            1. **Sube** una imagen de fruta (manzana, banana o naranja)
+            2. **Selecciona** el método de preprocesamiento en el panel lateral
+            3. **Haz clic** en "Evaluar Calidad" para obtener la predicción
             
-            ### Supported fruits:
-            - 🍎 Apples (fresh & rotten)
-            - 🍌 Bananas (fresh & rotten)  
-            - 🍊 Oranges (fresh & rotten)
+            ### Opciones de preprocesamiento:
+            - **Ninguno (Original)**: Inferencia directa sobre la imagen subida
+            - **GrabCut**: Segmentación iterativa basada en grafos
+            - **HSV + Morfología**: Segmentación basada en color
+            
+            ### Frutas soportadas:
+            - 🍎 Manzanas (frescas y podridas)
+            - 🍌 Bananas (frescas y podridas)  
+            - 🍊 Naranjas (frescas y podridas)
+            
+            ### El sistema detectará:
+            - **Tipo de fruta**: Manzana, Banana o Naranja
+            - **Calidad**: Fresca o Podrida
             """)
     
     # Footer
     st.markdown("---")
     st.markdown("""
     <div style="text-align: center; color: #888;">
-        Fruit Quality Analyzer | Image Analysis Project | 2026
+        Analizador de Calidad de Frutas | Modo Demo | No requiere dataset | 2026
     </div>
     """, unsafe_allow_html=True)
 
