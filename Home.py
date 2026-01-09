@@ -99,6 +99,12 @@ with col2:
     - Gradiente morfológico
     - Top Hat y Black Hat
     - Componentes conexas
+    
+    #### 06 - Clasificación de Frutas
+    - Detección de tipo: 🍎, 🍌, 🍊
+    - Calidad: Fresca vs Podrida
+    - Segmentación clásica (GrabCut/HSV)
+    - Basado en Deep Learning (MobileNetV2)
     """)
 
 st.markdown("---")

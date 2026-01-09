@@ -42,3 +42,19 @@ SEGMENTATION_METHODS = {
     "grabcut": "GrabCut (OpenCV) - iterative graph-based segmentation",
     "hsv": "HSV + Morphology - color thresholding with morphological ops"
 }
+
+# Fruit-specific HSV color ranges for Academic Recognition
+# Format: {fruit_name: [(lower, upper), ...]} (List because red wraps around)
+FRUIT_COLOR_RANGES = {
+    "Manzana 🍎": [
+        ((0, 40, 20), (10, 255, 255)),    # Rojo 1 (más amplio para podridas)
+        ((160, 40, 20), (180, 255, 255)), # Rojo 2
+        ((35, 30, 20), (85, 255, 255))    # Verde
+    ],
+    "Banana 🍌": [
+        ((20, 30, 20), (38, 255, 255))    # Amarillo/Marrón (Sat baja para podridas)
+    ],
+    "Naranja 🍊": [
+        ((10, 40, 20), (25, 255, 255))    # Naranja/Marrón (Sat baja para podridas)
+    ]
+}

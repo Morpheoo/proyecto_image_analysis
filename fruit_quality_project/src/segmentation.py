@@ -1,11 +1,29 @@
-"""
-Segmentation module for fruit isolation.
-Implements GrabCut and HSV-based segmentation methods.
-"""
-
 import cv2
 import numpy as np
-from typing import Tuple, Optional, Dict, Any
+from typing import Tuple, Optional, Dict, Any, List
+
+
+def get_hsv_channels(image: np.ndarray) -> Dict[str, np.ndarray]:
+    """
+    Extract H, S, V channels separately for academic visualization.
+    """
+    hsv = cv2.cvtColor(image, cv2.COLOR_RGB2HSV)
+    return {
+        'H': hsv[:, :, 0],
+        'S': hsv[:, :, 1],
+        'V': hsv[:, :, 2]
+    }
+
+
+def apply_filters(image: np.ndarray, method: str = "gaussian", kernel_size: int = 5) -> np.ndarray:
+    """
+    Apply image filtering for noise reduction.
+    """
+    if method == "gaussian":
+        return cv2.GaussianBlur(image, (kernel_size, kernel_size), 0)
+    elif method == "median":
+        return cv2.medianBlur(image, kernel_size)
+    return image
 
 
 def segment_grabcut(
@@ -94,64 +112,54 @@ def segment_hsv(
     morph_iterations: int = 2
 ) -> Dict[str, Any]:
     """
-    Segment fruit using HSV color thresholding and morphological operations.
-    
-    Args:
-        image: Input image (RGB format)
-        lower_hsv: Lower HSV bounds. Auto-detected if None.
-        upper_hsv: Upper HSV bounds. Auto-detected if None.
-        kernel_size: Size of morphological kernel
-        morph_iterations: Number of morphological iterations
-        
-    Returns:
-        Dictionary with same structure as segment_grabcut
+    Segmentación robusta usando combinación de Otsu (forma) y Rangos HSV (color).
     """
     h, w = image.shape[:2]
-    
-    # Convert to HSV
     hsv = cv2.cvtColor(image, cv2.COLOR_RGB2HSV)
     
-    # Auto-detect color ranges if not provided
+    # 1. Máscara de Otsu sobre el canal de Saturación (Excelente para fondos blancos/claros)
+    s_channel = hsv[:, :, 1]
+    _, otsu_mask = cv2.threshold(s_channel, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+    
+    # 2. Máscara de Rangos de Color
     if lower_hsv is None or upper_hsv is None:
         lower_hsv, upper_hsv = auto_detect_hsv_range(hsv)
     
-    # Create mask from HSV thresholding
-    mask1 = cv2.inRange(hsv, np.array(lower_hsv), np.array(upper_hsv))
+    # Manejar el wrap-around del Rojo (0-180)
+    if lower_hsv[0] > upper_hsv[0]:
+        mask1 = cv2.inRange(hsv, np.array((lower_hsv[0], lower_hsv[1], lower_hsv[2])), np.array((180, upper_hsv[1], upper_hsv[2])))
+        mask2 = cv2.inRange(hsv, np.array((0, lower_hsv[1], lower_hsv[2])), np.array((upper_hsv[0], upper_hsv[1], upper_hsv[2])))
+        range_mask = cv2.bitwise_or(mask1, mask2)
+    else:
+        range_mask = cv2.inRange(hsv, np.array(lower_hsv), np.array(upper_hsv))
     
-    # For fruits like apples/oranges, we might need multiple ranges (red wraps around)
-    # Add secondary range for red hues (0-10 and 160-180)
-    if lower_hsv[0] < 20:  # Likely looking for red/orange
-        lower_hsv2 = (160, lower_hsv[1], lower_hsv[2])
-        upper_hsv2 = (180, upper_hsv[1], upper_hsv[2])
-        mask2 = cv2.inRange(hsv, np.array(lower_hsv2), np.array(upper_hsv2))
-        mask1 = cv2.bitwise_or(mask1, mask2)
+    # 3. Combinación Adaptativa
+    # Si detectamos un fondo blanco/claro, la máscara de Otsu es sumamente confiable.
+    # El AND con range_mask puede ser demasiado agresivo.
+    binary_mask = cv2.bitwise_and(otsu_mask, range_mask)
     
-    # Morphological operations to clean up
+    # Salvaguarda: Si la combinación borró casi todo el objeto detectado por Otsu, 
+    # confiamos más en la forma (Otsu) que en el color detectado.
+    if np.sum(binary_mask > 0) < 0.2 * np.sum(otsu_mask > 0):
+        binary_mask = otsu_mask
+    
+    # Limpieza Morfológica
     kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (kernel_size, kernel_size))
-    
-    # Opening (remove noise)
-    binary_mask = cv2.morphologyEx(mask1, cv2.MORPH_OPEN, kernel, iterations=morph_iterations)
-    
-    # Closing (fill holes)
+    binary_mask = cv2.morphologyEx(binary_mask, cv2.MORPH_OPEN, kernel, iterations=morph_iterations)
     binary_mask = cv2.morphologyEx(binary_mask, cv2.MORPH_CLOSE, kernel, iterations=morph_iterations)
     
-    # Find largest contour (main fruit)
+    # Aislamiento del Contorno más grande
     contours, _ = cv2.findContours(binary_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-    
     if contours:
-        # Keep only the largest contour
         largest_contour = max(contours, key=cv2.contourArea)
         binary_mask = np.zeros((h, w), np.uint8)
         cv2.drawContours(binary_mask, [largest_contour], -1, 255, -1)
     
-    # Apply mask
+    # Generar resultado segmentado
     segmented = image.copy()
     segmented[binary_mask == 0] = 0
-    
-    # Find bounding box
     bbox = get_bounding_box(binary_mask)
     
-    # Crop
     if bbox is not None:
         x, y, bw, bh = bbox
         cropped = segmented[y:y+bh, x:x+bw]
@@ -159,7 +167,7 @@ def segment_hsv(
         cropped = segmented
         bbox = (0, 0, w, h)
     
-    method_info = f"HSV + morphology (lower={lower_hsv}, upper={upper_hsv}, kernel={kernel_size})"
+    method_info = f"HSV Adaptativo (lower={lower_hsv}, upper={upper_hsv})"
     
     return {
         'mask': binary_mask,
@@ -172,51 +180,63 @@ def segment_hsv(
 
 def auto_detect_hsv_range(hsv_image: np.ndarray) -> Tuple[Tuple, Tuple]:
     """
-    Auto-detect HSV range for fruit segmentation.
-    Uses center region statistics to estimate fruit color.
-    
-    Args:
-        hsv_image: Image in HSV format
-        
-    Returns:
-        Tuple of (lower_hsv, upper_hsv) bounds
+    Detección automática de rango filtrando píxeles de poco interés (fondos).
     """
+    # Tomar región central para muestreo
     h, w = hsv_image.shape[:2]
+    cy, cx = h // 2, w // 2
+    my, mx = h // 6, w // 6
+    roi = hsv_image[cy-my:cy+my, cx-mx:cx+mx]
     
-    # Sample from center region (likely the fruit)
-    center_y, center_x = h // 2, w // 2
-    margin_y, margin_x = h // 4, w // 4
+    # Filtrar solo píxeles con saturación y brillo decente (ignorar blancos/negros)
+    valid_pixels = roi[(roi[:, :, 1] > 30) & (roi[:, :, 2] > 30)]
     
-    center_region = hsv_image[
-        center_y - margin_y:center_y + margin_y,
-        center_x - margin_x:center_x + margin_x
-    ]
-    
-    # Compute statistics
-    h_mean = np.mean(center_region[:, :, 0])
-    s_mean = np.mean(center_region[:, :, 1])
-    v_mean = np.mean(center_region[:, :, 2])
-    
-    # Define ranges based on statistics
-    h_range = 25
-    s_lower = max(40, s_mean - 60)
-    v_lower = max(40, v_mean - 80)
-    
-    lower_hsv = (max(0, int(h_mean - h_range)), int(s_lower), int(v_lower))
-    upper_hsv = (min(180, int(h_mean + h_range)), 255, 255)
-    
-    return lower_hsv, upper_hsv
-
-
-def get_bounding_box(mask: np.ndarray) -> Optional[Tuple[int, int, int, int]]:
-    """
-    Get bounding box from binary mask.
-    
-    Args:
-        mask: Binary mask
+    if len(valid_pixels) > 0:
+        h_vals = valid_pixels[:, 0]
+        s_vals = valid_pixels[:, 1]
+        v_vals = valid_pixels[:, 2]
         
-    Returns:
-        Tuple (x, y, width, height) or None if mask is empty
+        h_mean = np.mean(h_vals)
+        s_mean = np.mean(s_vals)
+        v_mean = np.mean(v_vals)
+        
+        # Margen dinámico
+        h_min = (h_mean - 20) % 180
+        h_max = (h_mean + 20) % 180
+        lower = (int(h_min), max(40, int(s_mean*0.6)), max(40, int(v_mean*0.4)))
+        upper = (int(h_max), 255, 255)
+    else:
+        # Fallback si el centro es vacío/blanco: Rango amplio
+        lower = (0, 40, 40)
+        upper = (180, 255, 255)
+        
+    return lower, upper
+
+
+def get_solidity(contour) -> float:
+    """
+    Calculate solidity: Ratio of contour area to its convex hull area.
+    """
+    area = cv2.contourArea(contour)
+    hull = cv2.convexHull(contour)
+    hull_area = cv2.contourArea(hull)
+    if hull_area > 0:
+        return float(area) / hull_area
+    return 0
+
+
+def get_edges(image: np.ndarray, low_threshold: int = 50, high_threshold: int = 150) -> np.ndarray:
+    """
+    Apply Canny edge detection (Discontinuity segmentation).
+    """
+    gray = cv2.cvtColor(image, cv2.COLOR_RGB2GRAY)
+    edges = cv2.Canny(gray, low_threshold, high_threshold)
+    return edges
+
+
+def get_bounding_box(mask: np.ndarray, padding: int = 10) -> Optional[Tuple[int, int, int, int]]:
+    """
+    Get bounding box from binary mask with optional padding.
     """
     contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
     
@@ -233,6 +253,13 @@ def get_bounding_box(mask: np.ndarray) -> Optional[Tuple[int, int, int, int]]:
         y_min = min(y_min, y)
         x_max = max(x_max, x + w)
         y_max = max(y_max, y + h)
+    
+    # Apply padding and ensure it's within image bounds
+    h, w = mask.shape
+    x_min = max(0, x_min - padding)
+    y_min = max(0, y_min - padding)
+    x_max = min(w, x_max + padding)
+    y_max = min(h, y_max + padding)
     
     return (x_min, y_min, x_max - x_min, y_max - y_min)
 
