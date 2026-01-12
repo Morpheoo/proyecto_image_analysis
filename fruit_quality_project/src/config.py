@@ -47,14 +47,14 @@ SEGMENTATION_METHODS = {
 # Format: {fruit_name: [(lower, upper), ...]} (List because red wraps around)
 FRUIT_COLOR_RANGES = {
     "Manzana 🍎": [
-        ((0, 40, 20), (10, 255, 255)),    # Rojo 1 (más amplio para podridas)
-        ((160, 40, 20), (180, 255, 255)), # Rojo 2
-        ((35, 30, 20), (85, 255, 255))    # Verde
+        ((0, 20, 20), (10, 255, 255)),    # Rojo 1 (Sat bajada de 40 a 20)
+        ((160, 20, 20), (180, 255, 255)), # Rojo 2
+        ((35, 20, 20), (85, 255, 255))    # Verde
     ],
     "Banana 🍌": [
-        ((20, 30, 20), (38, 255, 255))    # Amarillo/Marrón (Sat baja para podridas)
+        ((20, 20, 20), (38, 255, 255))    # Amarillo/Marrón
     ],
     "Naranja 🍊": [
-        ((10, 40, 20), (25, 255, 255))    # Naranja/Marrón (Sat baja para podridas)
+        ((10, 20, 20), (28, 255, 255))    # Naranja/Marrón (Hue extendido a 28)
     ]
 }

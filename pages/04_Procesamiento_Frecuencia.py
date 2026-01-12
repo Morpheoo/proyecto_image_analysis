@@ -16,24 +16,29 @@ st.set_page_config(
     layout="wide"
 )
 
-# Estilo morado con degradado
 st.markdown("""
 <style>
-    .stApp {
-        background: linear-gradient(135deg, #1a0b2e 0%, #2d1b4e 50%, #16213e 100%);
+    /* Industrial Tech Aesthetic - Charcoal & Amber */
+    @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=JetBrains+Mono&display=swap');
+
+    :root {
+        --bg-color: #0d0d0d;
+        --card-bg: #161616;
+        --border-color: #262626;
+        --accent: #f59e0b;
+        --text-bright: #ffffff;
     }
-    [data-testid="stSidebar"] {
-        background: linear-gradient(180deg, #0f0324 0%, #1a0b2e 100%);
-    }
-    .stMarkdown, .stText, p, h1, h2, h3, label {
-        color: #ede9fe !important;
-    }
-    .stButton > button {
-        background: linear-gradient(90deg, #6b46c1 0%, #9f7aea 100%);
-        color: white;
-    }
+
+    header, [data-testid="stHeader"] { visibility: hidden; height: 0px; }
+    .stApp { background-color: var(--bg-color); color: var(--text-bright); font-family: 'Space Grotesk', sans-serif; }
+    [data-testid="stSidebar"] { background-color: #080808; border-right: 1px solid var(--border-color); }
+    [data-testid="stSidebarNav"] li a span { color: #ffffff !important; font-weight: 600 !important; font-size: 1rem !important; }
+    .main-header { font-size: 3rem; font-weight: 700; text-align: center; color: var(--accent); text-transform: uppercase; margin-bottom: 2rem; }
+    .stButton > button { background-color: var(--accent) !important; color: black !important; font-weight: 700; border-radius: 2px !important; }
 </style>
 """, unsafe_allow_html=True)
+
+st.markdown('<div class="main-header">FREQUENCY_DOMAIN_04</div>', unsafe_allow_html=True)
 
 # ========= Funciones de FFT =========
 def cargar_imagen_gray(uploaded_file, size=512):

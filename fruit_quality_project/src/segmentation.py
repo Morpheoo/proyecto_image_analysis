@@ -30,7 +30,8 @@ def segment_grabcut(
     image: np.ndarray,
     rect: Optional[Tuple[int, int, int, int]] = None,
     iterations: int = 5,
-    margin: int = 10
+    margin: int = 10,
+    **kwargs
 ) -> Dict[str, Any]:
     """
     Segment fruit using OpenCV GrabCut algorithm.
@@ -109,7 +110,8 @@ def segment_hsv(
     lower_hsv: Optional[Tuple[int, int, int]] = None,
     upper_hsv: Optional[Tuple[int, int, int]] = None,
     kernel_size: int = 5,
-    morph_iterations: int = 2
+    morph_iterations: int = 2,
+    **kwargs
 ) -> Dict[str, Any]:
     """
     Segmentación robusta usando combinación de Otsu (forma) y Rangos HSV (color).
@@ -147,7 +149,7 @@ def segment_hsv(
     kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (kernel_size, kernel_size))
     binary_mask = cv2.morphologyEx(binary_mask, cv2.MORPH_OPEN, kernel, iterations=morph_iterations)
     binary_mask = cv2.morphologyEx(binary_mask, cv2.MORPH_CLOSE, kernel, iterations=morph_iterations)
-    
+
     # Aislamiento del Contorno más grande
     contours, _ = cv2.findContours(binary_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
     if contours:

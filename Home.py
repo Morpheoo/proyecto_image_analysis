@@ -11,40 +11,74 @@ st.set_page_config(
 # Estilo morado con degradado
 st.markdown("""
 <style>
+    /* Industrial Tech Aesthetic - Charcoal & Amber */
+    @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=JetBrains+Mono&display=swap');
+
+    :root {
+        --bg-color: #0d0d0d;
+        --card-bg: #161616;
+        --border-color: #262626;
+        --accent: #f59e0b;
+        --text-bright: #ffffff;
+        --text-subtle: #a3a3a3;
+    }
+
+    /* Hide Streamlit Header */
+    header, [data-testid="stHeader"] { visibility: hidden; height: 0px; }
+
     .stApp {
-        background: linear-gradient(135deg, #1a0b2e 0%, #2d1b4e 50%, #16213e 100%);
+        background-color: var(--bg-color);
+        color: var(--text-bright);
+        font-family: 'Space Grotesk', sans-serif;
     }
+
+    /* Sidebar - High Contrast */
     [data-testid="stSidebar"] {
-        background: linear-gradient(180deg, #0f0324 0%, #1a0b2e 100%);
+        background-color: #080808;
+        border-right: 1px solid var(--border-color);
     }
-    .stMarkdown, .stText, p, h1, h2, h3, h4, h5, h6, label {
-        color: #ede9fe !important;
+    
+    /* Sidebar Navigation Links - WHITE & BOLD */
+    [data-testid="stSidebarNav"] li a span {
+        color: #ffffff !important;
+        font-weight: 600 !important;
+        font-size: 1rem !important;
     }
-    .stButton > button {
-        background: linear-gradient(90deg, #6b46c1 0%, #9f7aea 100%);
-        color: white;
-        border: none;
-        border-radius: 8px;
+    
+    /* Sidebar Section Titles - AMBER */
+    [data-testid="stSidebar"] h1, [data-testid="stSidebar"] h2, [data-testid="stSidebar"] h3 {
+        color: var(--accent) !important;
     }
-    .stButton > button:hover {
-        background: linear-gradient(90deg, #553c9a 0%, #805ad5 100%);
+
+    .main-header {
+        font-size: 3.5rem;
+        font-weight: 700;
+        text-align: center;
+        color: var(--accent);
+        text-transform: uppercase;
+        letter-spacing: -1px;
+    }
+
+    .glass-card {
+        background-color: var(--card-bg);
+        border: 1px solid var(--border-color);
+        padding: 24px;
+        margin-bottom: 24px;
+        border-radius: 4px;
     }
 </style>
 """, unsafe_allow_html=True)
 
 # Sidebar con branding Spectra
 with st.sidebar:
-    # Logo y nombre Spectra en el sidebar
     st.image("image.png", width=180)
-    st.markdown("<h1 style='text-align: center; color: #c4b5fd;'>Spectra</h1>", unsafe_allow_html=True)
-    st.markdown("<p style='text-align: center; color: #9f7aea; font-size: 14px;'>Image Analysis Platform</p>", unsafe_allow_html=True)
+    st.markdown("<h2 style='text-align: center;'>SPECTRA</h2>", unsafe_allow_html=True)
+    st.markdown("<p style='text-align: center; color: #a3a3a3; font-size: 12px; letter-spacing: 2px;'>IMAGE ANALYSIS ENGINE</p>", unsafe_allow_html=True)
     st.markdown("---")
-    st.markdown("### 🧭 Navegación")
-    st.info("Usa el menú superior para acceder a los diferentes módulos de procesamiento.")
 
 # Título de bienvenida
-st.title("Proyecto de Image Analysis")
-st.markdown("---")
+st.markdown('<div class="main-header">SPECTRA PROJECT</div>', unsafe_allow_html=True)
+st.markdown('<p style="text-align: center; color: var(--text-subtle); letter-spacing: 2px; margin-bottom: 3rem;">COMPUTER VISION ACADEMIC PLATFORM</p>', unsafe_allow_html=True)
 
 # Bienvenida
 st.markdown("""
