@@ -227,6 +227,104 @@ def get_solidity(contour) -> float:
     return 0
 
 
+def detect_multiple_objects(
+    image: np.ndarray,
+    min_area_ratio: float = 0.01,
+    kernel_size: int = 5,
+    morph_iterations: int = 2
+) -> List[Dict[str, Any]]:
+    """
+    Detect multiple separated objects in an image using contour analysis.
+    
+    Args:
+        image: Input image (RGB)
+        min_area_ratio: Minimum object area as ratio of total image area (default 1%)
+        kernel_size: Morphology kernel size
+        morph_iterations: Number of morphology iterations
+        
+    Returns:
+        List of dicts, each containing:
+        - 'id': Object index (1-based)
+        - 'mask': Binary mask for this object only
+        - 'cropped': Cropped RGB image of the object (with black background)
+        - 'bbox': Bounding box (x, y, w, h)
+        - 'contour': The contour points
+        - 'area': Contour area in pixels
+    """
+    h, w = image.shape[:2]
+    total_area = h * w
+    min_area = total_area * min_area_ratio
+    
+    # Convert to HSV
+    hsv = cv2.cvtColor(image, cv2.COLOR_RGB2HSV)
+    
+    # Create mask using Otsu on Saturation channel (works great for white backgrounds)
+    s_channel = hsv[:, :, 1]
+    _, binary_mask = cv2.threshold(s_channel, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+    
+    # Morphological cleanup
+    kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (kernel_size, kernel_size))
+    binary_mask = cv2.morphologyEx(binary_mask, cv2.MORPH_OPEN, kernel, iterations=morph_iterations)
+    binary_mask = cv2.morphologyEx(binary_mask, cv2.MORPH_CLOSE, kernel, iterations=morph_iterations)
+    
+    # Find ALL external contours
+    contours, _ = cv2.findContours(binary_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    
+    # Filter and process each contour
+    detected_objects = []
+    obj_id = 0
+    
+    for contour in contours:
+        area = cv2.contourArea(contour)
+        
+        # Skip if too small
+        if area < min_area:
+            continue
+            
+        obj_id += 1
+        
+        # Create individual mask for this object
+        obj_mask = np.zeros((h, w), dtype=np.uint8)
+        cv2.drawContours(obj_mask, [contour], -1, 255, -1)
+        
+        # Get bounding box
+        x, y, bw, bh = cv2.boundingRect(contour)
+        
+        # Add padding
+        pad = 5
+        x1 = max(0, x - pad)
+        y1 = max(0, y - pad)
+        x2 = min(w, x + bw + pad)
+        y2 = min(h, y + bh + pad)
+        
+        # Crop the object (with black background)
+        cropped_img = image.copy()
+        cropped_img[obj_mask == 0] = 0
+        cropped_img = cropped_img[y1:y2, x1:x2]
+        
+        # Crop the mask too
+        cropped_mask = obj_mask[y1:y2, x1:x2]
+        
+        detected_objects.append({
+            'id': obj_id,
+            'mask': obj_mask,
+            'cropped_mask': cropped_mask,
+            'cropped': cropped_img,
+            'bbox': (x, y, bw, bh),
+            'contour': contour,
+            'area': area
+        })
+    
+    # Sort by area (largest first)
+    detected_objects.sort(key=lambda x: x['area'], reverse=True)
+    
+    # Re-assign IDs after sorting
+    for i, obj in enumerate(detected_objects):
+        obj['id'] = i + 1
+    
+    return detected_objects
+
+
 def get_edges(image: np.ndarray, low_threshold: int = 50, high_threshold: int = 150) -> np.ndarray:
     """
     Apply Canny edge detection (Discontinuity segmentation).

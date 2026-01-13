@@ -28,8 +28,8 @@ except ImportError as e:
     st.info(f"Buscando en: {FRUIT_PROJECT_DIR}")
     fruit_main = None
 
-if __name__ == "__main__":
-    if fruit_main:
-        fruit_main()
-    else:
-        st.error("La aplicación de clasificación de frutas no está disponible.")
+# Las páginas de Streamlit se ejecutan directamente, no como __main__
+if fruit_main:
+    fruit_main()
+else:
+    st.error("La aplicación de clasificación de frutas no está disponible.")

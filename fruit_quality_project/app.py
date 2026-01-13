@@ -20,7 +20,7 @@ import cv2
 PROJECT_ROOT = Path(__file__).parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
-from src.segmentation import segment_image, get_edges, get_hsv_channels, apply_filters, get_solidity
+from src.segmentation import segment_image, get_edges, get_hsv_channels, apply_filters, get_solidity, detect_multiple_objects
 from src.inference import load_inference_model, predict, check_model_status, get_device
 from src.config import CLASS_NAMES, DEFAULT_MODEL_PATH, SEGMENTATION_METHODS, FRUIT_COLOR_RANGES
 
@@ -446,6 +446,83 @@ def save_evaluation(image, segmented, result, fruit_type, seg_method, output_dir
     return prefix
 
 
+def analyze_multiple_fruits(image_np: np.ndarray, model, device, min_area_ratio: float = 0.01) -> dict:
+    """
+    Analizar múltiples frutas en una imagen.
+    
+    Returns:
+        dict con:
+        - 'objects': Lista de objetos detectados con su clasificación
+        - 'summary': Resumen de conteo por tipo y calidad
+        - 'total': Número total de frutas detectadas
+        - 'annotated_image': Imagen con bounding boxes dibujados
+    """
+    # Detectar todos los objetos
+    detected = detect_multiple_objects(image_np, min_area_ratio=min_area_ratio)
+    
+    if not detected:
+        return {
+            'objects': [],
+            'summary': {},
+            'total': 0,
+            'annotated_image': image_np
+        }
+    
+    results = []
+    summary = {}  # {"Manzana 🍎": {"Fresca": 1, "Dañada": 0}, ...}
+    
+    # Crear imagen anotada
+    annotated = image_np.copy()
+    
+    for obj in detected:
+        # Extraer características para reconocer tipo de fruta
+        features = extract_features(image_np, obj['mask'])
+        fruit_info = detect_fruit_type_improved(features)
+        
+        # Clasificar calidad con el modelo
+        if model is not None:
+            dl_result = predict_quality(model, obj['cropped'], device)
+            quality = "Fresca" if dl_result['prediction'] == 'Fresh' else "Dañada"
+            quality_confidence = dl_result['confidence']
+        else:
+            quality = "N/A"
+            quality_confidence = 0.0
+        
+        # Agregar al resumen
+        fruit_type = fruit_info['fruit_type']
+        if fruit_type not in summary:
+            summary[fruit_type] = {"Fresca": 0, "Dañada": 0}
+        if quality in summary[fruit_type]:
+            summary[fruit_type][quality] += 1
+        
+        # Dibujar bounding box
+        x, y, w, h = obj['bbox']
+        color = (16, 185, 129) if quality == "Fresca" else (239, 68, 68)  # green / red
+        cv2.rectangle(annotated, (x, y), (x + w, y + h), color, 3)
+        
+        # Etiqueta
+        label = f"#{obj['id']} {fruit_type.split()[0]}"
+        cv2.putText(annotated, label, (x, y - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.6, color, 2)
+        
+        results.append({
+            'id': obj['id'],
+            'fruit_type': fruit_type,
+            'fruit_confidence': fruit_info['confidence'],
+            'quality': quality,
+            'quality_confidence': quality_confidence,
+            'cropped': obj['cropped'],
+            'bbox': obj['bbox'],
+            'features': features
+        })
+    
+    return {
+        'objects': results,
+        'summary': summary,
+        'total': len(results),
+        'annotated_image': annotated
+    }
+
+
 def main():
     # Header
     st.markdown('<div class="main-header">SPECTRA</div>', unsafe_allow_html=True)
@@ -457,6 +534,17 @@ def main():
         
         # Auto-verificación del modelo
         model_available = show_model_status()
+        
+        st.markdown("---")
+        
+        # Modo de análisis
+        st.subheader("🎯 Modo de Análisis")
+        analysis_mode = st.radio(
+            "Selecciona el modo",
+            ["🍎 Fruta Individual", "🍎🍊🍌 Múltiples Frutas"],
+            index=0,
+            help="Individual: una fruta por imagen. Múltiples: detecta y clasifica varias frutas separadas."
+        )
         
         st.markdown("---")
         
@@ -511,226 +599,484 @@ def main():
         st.divider()
         st.subheader("🔬 Laboratorio de Análisis y Clasificación")
         
-        # Aplicar segmentación completa (Cálculo interno)
-        with st.spinner("Procesando..."):
-            if seg_method == "Ninguno (Original)":
-                segmented = image_np
-                mask = np.ones(image_np.shape[:2], dtype=np.uint8) * 255
-                method_info = "Sin segmentación"
+        # ========== MODO MÚLTIPLES FRUTAS ==========
+        if analysis_mode == "🍎🍊🍌 Múltiples Frutas":
+            st.info("🔍 **Modo Múltiples Frutas**: Detectando y clasificando cada fruta por separado...")
+            
+            # Cargar modelo
+            model, device, info = load_classification_model() if model_available else (None, None, None)
+            
+            # Ejecutar análisis una sola vez
+            with st.spinner("Analizando imagen..."):
+                multi_result = analyze_multiple_fruits(image_np, model, device)
+            
+            # ===== RESULTADO FINAL (Para ver directo) =====
+            st.markdown('<div class="tech-header">🏆 RESULTADO FINAL</div>', unsafe_allow_html=True)
+            
+            if multi_result['total'] == 0:
+                st.warning("⚠️ No se detectaron frutas en la imagen. Intenta con una imagen que tenga frutas separadas sobre un fondo claro.")
+                st.image(image_np, caption="Imagen Original", use_container_width=True)
             else:
-                try:
-                    if seg_method == "GrabCut":
-                        seg_result = segment_image(image_np, method="grabcut", iterations=iterations, margin=margin)
-                    else:
-                        seg_result = segment_image(image_np, method="hsv", kernel_size=kernel_size)
+                # Imagen anotada con bounding boxes
+                col_img, col_summary = st.columns([1.5, 1])
+                
+                with col_img:
+                    st.image(multi_result['annotated_image'], caption=f"✅ Se detectaron {multi_result['total']} frutas", use_container_width=True)
+                
+                with col_summary:
+                    st.markdown("### 📊 Resumen")
+                    for fruit_type, counts in multi_result['summary'].items():
+                        total_type = counts['Fresca'] + counts['Dañada']
+                        fresh_pct = (counts['Fresca'] / total_type * 100) if total_type > 0 else 0
+                        
+                        st.markdown(f"""
+                        <div style="background: linear-gradient(135deg, #1a1a1a, #262626); padding: 1rem; border-radius: 10px; margin-bottom: 10px; border: 1px solid #333;">
+                            <div style="font-size: 1.5rem; text-align: center;">{fruit_type}</div>
+                            <div style="font-size: 2rem; font-weight: 700; color: #f59e0b; text-align: center;">{total_type}</div>
+                            <div style="font-size: 0.85rem; color: #888; text-align: center;">
+                                ✅ {counts['Fresca']} Frescas | ❌ {counts['Dañada']} Dañadas
+                            </div>
+                            <div style="margin-top: 8px; background: #333; border-radius: 8px; overflow: hidden;">
+                                <div style="width: {fresh_pct}%; background: #10b981; height: 6px;"></div>
+                            </div>
+                        </div>
+                        """, unsafe_allow_html=True)
+                
+                # Grid de frutas clasificadas
+                st.markdown("### 🍎 Frutas Detectadas")
+                fruit_cols = st.columns(min(multi_result['total'], 4))
+                for i, obj in enumerate(multi_result['objects'][:4]):
+                    with fruit_cols[i]:
+                        quality_color = "#10b981" if obj['quality'] == "Fresca" else "#ef4444"
+                        st.image(obj['cropped'], use_container_width=True)
+                        st.markdown(f"""
+                        <div style="text-align: center; padding: 8px; background: #1a1a1a; border-radius: 8px;">
+                            <div style="font-weight: 600; font-size: 0.9rem;">{obj['fruit_type']}</div>
+                            <div style="color: {quality_color}; font-weight: 700;">{obj['quality']}</div>
+                        </div>
+                        """, unsafe_allow_html=True)
+            
+            # Separador
+            st.markdown("---")
+            st.markdown("### 🎓 Proceso Paso a Paso (Académico)")
+            st.caption("Navega por las pestañas para ver cómo llegamos a este resultado:")
+            
+            # ===== PASO A PASO ACADÉMICO =====
+            step_tabs = st.tabs([
+                "1️⃣ Imagen Original",
+                "2️⃣ Espacio HSV", 
+                "3️⃣ Segmentación (Otsu)",
+                "4️⃣ Morfología",
+                "5️⃣ Detección Contornos",
+                "6️⃣ Recorte Individual",
+                "7️⃣ Clasificación Final"
+            ])
+            
+            # --- PASO 1: Imagen Original ---
+            with step_tabs[0]:
+                st.markdown('<div class="tech-header">📷 PASO 1: IMAGEN ORIGINAL</div>', unsafe_allow_html=True)
+                st.markdown('<div class="info-block"><b>¿Qué hacemos?</b> Cargamos la imagen RGB tal cual la subió el usuario. Esta es nuestra entrada al sistema.</div>', unsafe_allow_html=True)
+                st.image(image_np, caption="Imagen de entrada (RGB)", use_container_width=True)
+                st.markdown(f"**Dimensiones:** {image_np.shape[1]} x {image_np.shape[0]} píxeles")
+            
+            # --- PASO 2: Conversión a HSV ---
+            with step_tabs[1]:
+                st.markdown('<div class="tech-header">🎨 PASO 2: CONVERSIÓN A ESPACIO HSV</div>', unsafe_allow_html=True)
+                st.markdown('''<div class="info-block">
+                <b>¿Por qué HSV?</b> El espacio RGB mezcla color y brillo. En HSV separamos:
+                <ul>
+                <li><b>H (Hue)</b>: El color puro (0-180°)</li>
+                <li><b>S (Saturation)</b>: Qué tan "vivo" es el color</li>
+                <li><b>V (Value)</b>: Qué tan brillante es</li>
+                </ul>
+                El canal <b>S</b> es clave: las frutas tienen alta saturación, el fondo blanco tiene baja.
+                </div>''', unsafe_allow_html=True)
+                
+                hsv_img = cv2.cvtColor(image_np, cv2.COLOR_RGB2HSV)
+                channels = get_hsv_channels(image_np)
+                
+                c1, c2, c3 = st.columns(3)
+                c1.image(channels['H'], caption="Canal H (Tono)", use_container_width=True)
+                c2.image(channels['S'], caption="Canal S (Saturación) ⭐", use_container_width=True)
+                c3.image(channels['V'], caption="Canal V (Brillo)", use_container_width=True)
+            
+            # --- PASO 3: Umbralización Otsu ---
+            with step_tabs[2]:
+                st.markdown('<div class="tech-header">🎯 PASO 3: SEGMENTACIÓN POR OTSU</div>', unsafe_allow_html=True)
+                st.markdown('''<div class="info-block">
+                <b>¿Qué es Otsu?</b> Es un algoritmo que encuentra automáticamente el mejor umbral para separar dos clases (frutas vs fondo).
+                <br><br>
+                <b>¿Cómo funciona?</b> Analiza el histograma del canal S y busca el valor que maximiza la varianza entre clases.
+                <br><br>
+                <b>Resultado:</b> Máscara binaria donde blanco = fruta, negro = fondo.
+                </div>''', unsafe_allow_html=True)
+                
+                hsv_img = cv2.cvtColor(image_np, cv2.COLOR_RGB2HSV)
+                s_channel = hsv_img[:, :, 1]
+                thresh_val, otsu_mask = cv2.threshold(s_channel, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+                
+                c1, c2 = st.columns(2)
+                c1.image(s_channel, caption="Canal de Saturación", use_container_width=True)
+                c2.image(otsu_mask, caption=f"Máscara Otsu (umbral={thresh_val:.0f})", use_container_width=True)
+                
+                st.success(f"✅ Otsu encontró umbral óptimo: **{thresh_val:.0f}** (de 0-255)")
+            
+            # --- PASO 4: Morfología ---
+            with step_tabs[3]:
+                st.markdown('<div class="tech-header">🧹 PASO 4: LIMPIEZA MORFOLÓGICA</div>', unsafe_allow_html=True)
+                st.markdown('''<div class="info-block">
+                <b>¿Por qué limpiar?</b> Otsu puede dejar:
+                <ul>
+                <li>Puntitos blancos de ruido (falsos positivos)</li>
+                <li>Huecos negros dentro de las frutas (falsos negativos)</li>
+                </ul>
+                <b>Operaciones:</b>
+                <ul>
+                <li><b>Apertura (Opening)</b>: Erosión + Dilatación → Elimina puntos pequeños</li>
+                <li><b>Cierre (Closing)</b>: Dilatación + Erosión → Rellena huecos</li>
+                </ul>
+                </div>''', unsafe_allow_html=True)
+                
+                kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5))
+                opened = cv2.morphologyEx(otsu_mask, cv2.MORPH_OPEN, kernel, iterations=2)
+                closed = cv2.morphologyEx(opened, cv2.MORPH_CLOSE, kernel, iterations=2)
+                
+                c1, c2, c3 = st.columns(3)
+                c1.image(otsu_mask, caption="Antes (Otsu crudo)", use_container_width=True)
+                c2.image(opened, caption="Después de Apertura", use_container_width=True)
+                c3.image(closed, caption="Después de Cierre ✅", use_container_width=True)
+            
+            # --- PASO 5: Detección de Contornos ---
+            with step_tabs[4]:
+                st.markdown('<div class="tech-header">🔍 PASO 5: DETECCIÓN DE CONTORNOS</div>', unsafe_allow_html=True)
+                st.markdown('''<div class="info-block">
+                <b>¿Qué es un contorno?</b> Es la frontera entre píxeles blancos y negros en la máscara.
+                <br><br>
+                <b>cv2.findContours()</b> encuentra TODOS los bordes externos de las regiones blancas.
+                <br><br>
+                <b>Filtrado:</b> Descartamos contornos muy pequeños (< 1% del área total) para eliminar ruido residual.
+                </div>''', unsafe_allow_html=True)
+                
+                contours, _ = cv2.findContours(closed, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+                
+                # Filtrar por área
+                h, w = image_np.shape[:2]
+                min_area = h * w * 0.01
+                valid_contours = [c for c in contours if cv2.contourArea(c) >= min_area]
+                
+                # Dibujar contornos
+                contour_viz = image_np.copy()
+                colors = [(255, 0, 0), (0, 255, 0), (0, 0, 255), (255, 255, 0), (255, 0, 255), (0, 255, 255)]
+                for i, cnt in enumerate(valid_contours):
+                    color = colors[i % len(colors)]
+                    cv2.drawContours(contour_viz, [cnt], -1, color, 3)
+                    x, y, bw, bh = cv2.boundingRect(cnt)
+                    cv2.putText(contour_viz, f"#{i+1}", (x, y-10), cv2.FONT_HERSHEY_SIMPLEX, 0.8, color, 2)
+                
+                c1, c2 = st.columns(2)
+                c1.image(closed, caption="Máscara Limpia", use_container_width=True)
+                c2.image(contour_viz, caption=f"Contornos Detectados: {len(valid_contours)}", use_container_width=True)
+                
+                st.info(f"📊 Total contornos encontrados: {len(contours)} → Después de filtrar: **{len(valid_contours)} objetos**")
+            
+            # --- PASO 6: Recorte Individual ---
+            with step_tabs[5]:
+                st.markdown('<div class="tech-header">✂️ PASO 6: RECORTE INDIVIDUAL (ROI)</div>', unsafe_allow_html=True)
+                st.markdown('''<div class="info-block">
+                <b>¿Qué hacemos?</b> Para cada contorno válido:
+                <ol>
+                <li>Calculamos su <b>bounding box</b> (rectángulo envolvente)</li>
+                <li>Creamos una máscara individual solo para ese objeto</li>
+                <li>Recortamos la imagen RGB usando esa máscara</li>
+                </ol>
+                Así obtenemos cada fruta por separado, lista para clasificar.
+                </div>''', unsafe_allow_html=True)
+                
+                # Mostrar cada recorte
+                if len(valid_contours) > 0:
+                    crop_cols = st.columns(min(len(valid_contours), 4))
+                    for i, cnt in enumerate(valid_contours[:4]):
+                        with crop_cols[i]:
+                            # Crear máscara individual
+                            obj_mask = np.zeros((h, w), dtype=np.uint8)
+                            cv2.drawContours(obj_mask, [cnt], -1, 255, -1)
+                            
+                            # Recortar
+                            x, y, bw, bh = cv2.boundingRect(cnt)
+                            pad = 5
+                            x1, y1 = max(0, x-pad), max(0, y-pad)
+                            x2, y2 = min(w, x+bw+pad), min(h, y+bh+pad)
+                            
+                            cropped = image_np.copy()
+                            cropped[obj_mask == 0] = 0
+                            cropped = cropped[y1:y2, x1:x2]
+                            
+                            st.image(cropped, caption=f"Fruta #{i+1}", use_container_width=True)
+                            st.caption(f"Área: {cv2.contourArea(cnt):.0f} px²")
+                else:
+                    st.warning("No se detectaron frutas válidas")
+            
+            # --- PASO 7: Clasificación Final ---
+            with step_tabs[6]:
+                st.markdown('<div class="tech-header">🧠 PASO 7: CLASIFICACIÓN FINAL</div>', unsafe_allow_html=True)
+                st.markdown('''<div class="info-block">
+                <b>Para cada fruta recortada aplicamos:</b>
+                <ol>
+                <li><b>Extracción de Descriptores de Forma:</b> Área, Perímetro, Circularidad, Relación de Aspecto</li>
+                <li><b>Extracción de Descriptores de Color:</b> Cobertura HSV por tipo de fruta</li>
+                <li><b>Reconocedor de Tipo:</b> Sistema de reglas que clasifica: Manzana, Banana o Naranja</li>
+                <li><b>Clasificador de Calidad:</b> Red neuronal MobileNetV2 → Fresca o Dañada</li>
+                </ol>
+                </div>''', unsafe_allow_html=True)
+                
+                # Usar resultado ya calculado
+                if multi_result['total'] == 0:
+                    st.warning("No se detectaron frutas")
+                else:
+                    # Mostrar imagen anotada
+                    st.image(multi_result['annotated_image'], caption=f"Resultado Final: {multi_result['total']} frutas detectadas", use_container_width=True)
                     
-                    segmented = seg_result['segmented']
-                    mask = seg_result['mask']
-                    method_info = seg_result['method_info']
-                except Exception as e:
-                    st.error(f"Error: {e}")
+                    # Resumen
+                    st.markdown("### 📊 Resumen de Clasificación")
+                    summary_cols = st.columns(len(multi_result['summary']) if multi_result['summary'] else 1)
+                    col_idx = 0
+                    for fruit_type, counts in multi_result['summary'].items():
+                        with summary_cols[col_idx % len(summary_cols)]:
+                            total_type = counts['Fresca'] + counts['Dañada']
+                            st.metric(fruit_type, f"{total_type} detectadas", f"✅ {counts['Fresca']} frescas")
+                        col_idx += 1
+                    
+                    # Tabla detallada
+                    st.markdown("### 📋 Detalle por Fruta")
+                    for obj in multi_result['objects']:
+                        with st.expander(f"Fruta #{obj['id']}: {obj['fruit_type']} - {obj['quality']}"):
+                            c1, c2 = st.columns([1, 2])
+                            with c1:
+                                st.image(obj['cropped'], use_container_width=True)
+                            with c2:
+                                st.write(f"**Tipo:** {obj['fruit_type']}")
+                                st.write(f"**Calidad:** {obj['quality']} ({obj['quality_confidence']*100:.1f}% confianza)")
+                                if obj['features']:
+                                    st.write(f"**Circularidad:** {obj['features'].get('circularidad', 0):.3f}")
+                                    st.write(f"**Rel. Aspecto:** {obj['features'].get('relación_aspecto_rotada', 0):.2f}")
+        
+        # ========== MODO FRUTA INDIVIDUAL (Original) ==========
+        else:
+            # Aplicar segmentación completa (Cálculo interno)
+            with st.spinner("Procesando..."):
+                if seg_method == "Ninguno (Original)":
                     segmented = image_np
                     mask = np.ones(image_np.shape[:2], dtype=np.uint8) * 255
-                    method_info = "Fallback"
-
-        # Extraer descriptores y obtener máscara refinada académica
-        features = extract_features(image_np, mask)
-        viz_mask = features.get('refined_mask', mask) if features else mask
-
-        if seg_method == "HSV + Morfología":
-            # --- PIPELINE HSV ---
-            hsv_tabs = st.tabs(["1. 🧪 Canales Color", "2. 🧬 Máscaras", "3. 🧼 Morfología", "4. 📊 Datos Finales"])
-            
-            with hsv_tabs[0]:
-                st.markdown('<div class="tech-header">ANÁLISIS DE CANALES (HSV)</div>', unsafe_allow_html=True)
-                st.markdown('<div class="info-block">Descomponemos la luz: <b>H</b> (Tono), <b>S</b> (Saturación), <b>V</b> (Brillo). Observa cómo el canal S suele resaltar mejor la fruta.</div>', unsafe_allow_html=True)
-                channels = get_hsv_channels(image_np)
-                c1, c2, c3 = st.columns(3)
-                c1.image(channels['H'], caption="H: Qué color es", use_container_width=True)
-                c2.image(channels['S'], caption="S: Qué tan puro es", use_container_width=True)
-                c3.image(channels['V'], caption="V: Cuánta luz tiene", use_container_width=True)
-
-            with hsv_tabs[1]:
-                st.markdown('<div class="tech-header">GENERACIÓN DE MÁSCARAS</div>', unsafe_allow_html=True)
-                st.markdown('<div class="info-block">Creamos dos "moldes": uno basado en la forma (Otsu) y otro en el color específico de la fruta.</div>', unsafe_allow_html=True)
-                
-                # Simulación visual de pasos HSV
-                hsv_img = cv2.cvtColor(image_np, cv2.COLOR_RGB2HSV)
-                # Otsu
-                _, otsu_m = cv2.threshold(hsv_img[:,:,1], 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
-                # Color (aprox)
-                # Usamos el resultado 'segmented' para inferir qué pasó, o calculamos rápido
-                # Para fines educativos visualizamos lo que tenemos
-                c1, c2 = st.columns(2)
-                c1.image(otsu_m, caption="Máscara de Forma (Otsu en S)", use_container_width=True)
-                c2.image(seg_result.get('mask', mask), caption="Máscara Combinada Final", use_container_width=True)
-
-            with hsv_tabs[2]:
-                st.markdown('<div class="tech-header">REFINAMIENTO (MORFOLOGÍA)</div>', unsafe_allow_html=True)
-                st.markdown('<div class="info-block">Usamos operaciones matemáticas (Erosión/Dilatación) para limpiar ruido (puntitos blancos) y cerrar huecos negros dentro de la fruta.</div>', unsafe_allow_html=True)
-                c1, c2 = st.columns(2)
-                c1.image(seg_result.get('mask', mask), caption="Máscara Limpia", use_container_width=True)
-                c2.image(seg_result.get('segmented', segmented), caption="Fruta Recortada", use_container_width=True)
-
-            with hsv_tabs[3]:
-                st.markdown('<div class="tech-header">RESULTADOS ANALÍTICOS</div>', unsafe_allow_html=True)
-                if features:
-                    c1, c2 = st.columns([1,1])
-                    with c1:
-                        st.image(seg_result.get('segmented', segmented), caption="Final para Clasificación", width=300)
-                    with c2:
-                         st.markdown("#### Métricas")
-                         st.write(f"- **Área**: {features['área']:.0f} px")
-                         st.write(f"- **Circularidad**: {features['circularidad']:.2f}")
-
-        elif seg_method == "GrabCut":
-            # --- PIPELINE GRABCUT ---
-            gc_tabs = st.tabs(["1. 📦 Inicialización", "2. ⚙️ Proceso Iterativo", "3. 🍎 Resultado", "4. 📊 Datos"])
-            
-            with gc_tabs[0]:
-                st.markdown('<div class="tech-header">DEFINICIÓN DE REGIÓN (ROI)</div>', unsafe_allow_html=True)
-                st.markdown('<div class="info-block">GrabCut necesita una pista inicial: un rectángulo donde <b>probablemente</b> está la fruta. Todo lo de afuera es 100% fondo.</div>', unsafe_allow_html=True)
-                
-                # Dibujar rectángulo simulado
-                viz_rect = image_np.copy()
-                h, w = viz_rect.shape[:2]
-                # Default logic from segmentation.py
-                m = margin
-                cv2.rectangle(viz_rect, (m, m), (w-2*m, h-2*m), (255, 0, 0), 3)
-                st.image(viz_rect, caption=f"Rectángulo Inicial (Margen {margin}px)", use_container_width=True)
-
-            with gc_tabs[1]:
-                st.markdown('<div class="tech-header">MODELADO GAUSSIANO (GMM)</div>', unsafe_allow_html=True)
-                st.markdown(f'<div class="info-block">El algoritmo ejecuta <b>{iterations} iteraciones</b>. En cada paso, construye un modelo de color para el "Fondo" y otro para el "Frente", refinando el borde píxel a píxel.</div>', unsafe_allow_html=True)
-                st.image(seg_result.get('mask', mask), caption="Máscara de Probabilidad Resultante", use_container_width=True)
-
-            with gc_tabs[2]:
-                st.markdown('<div class="tech-header">EXTRACCIÓN FINAL</div>', unsafe_allow_html=True)
-                st.image(seg_result.get('segmented', segmented), caption="Objeto Aislado", use_container_width=True)
-                
-            with gc_tabs[3]:
-                 st.markdown('<div class="tech-header">ANÁLISIS GEOMÉTRICO</div>', unsafe_allow_html=True)
-                 if features:
-                     st.dataframe(features)
-
-        else:
-            st.image(image_np, caption="Imagen Original (Sin Segmentación)")
-
-        # Sección común de Descriptores detallados (siempre útil)
-        st.markdown("---")
-        st.markdown('<div class="tech-header">🔬 REPORTE DETALLADO DE FORMA Y COLOR</div>', unsafe_allow_html=True)
-        if features:
-             c_tab1, c_tab2 = st.columns([1.5, 1])
-             with c_tab1:
-                 data = {
-                     "Atributo": ["📏 Área", "📉 Perímetro", "🖼️ Aspecto", "⭕ Circularidad", "💎 Solidez"],
-                     "Valor": [
-                         f"{features['área']:.0f} px²",
-                         f"{features['perímetro']:.1f} px",
-                         f"{features['relación_aspecto_rotada']:.2f}",
-                         f"{features['circularidad']:.4f}",
-                         f"{features['solidez']:.4f}"
-                     ]
-                 }
-                 st.table(data)
-             with c_tab2:
-                 st.markdown("##### Cobertura Color")
-                 for fruit, coverage in features['color_coverage'].items():
-                     val = coverage * 100
-                     color = "#10b981" if val > 30 else "#f59e0b" if val > 10 else "#6b7280"
-                     st.markdown(f"<span style='color:{color}; font-weight:bold;'>{fruit}: {val:.1f}%</span>", unsafe_allow_html=True)
-
-        # RECONOCEDOR
-        st.markdown("---")
-        if st.button("🚀 Ejecutar Reconocedor (Clasificador)", type="primary", use_container_width=True):
-            if model_available:
-                with st.spinner("Analizando calidad y forma..."):
-                    # Inferencia de Deep Learning (Calidad)
-                    model, device, info = load_classification_model()
-                    dl_result = predict_quality(model, segmented, device)
-                    
-                    # Análisis de Forma (Tipo de Fruta)
-                    fruit_info = detect_fruit_type_improved(features)
-                    
-                    # Mostrar Resultado Final
-                    st.markdown('<div class="verdict-card">', unsafe_allow_html=True)
-                    st.markdown('<div class="section-title">🏆 Veredicto de Spectra</div>', unsafe_allow_html=True)
-                    
-                    res_col1, res_col2 = st.columns(2)
-                    
-                    with res_col1:
-                        st.markdown(f"""
-                        <div style="background: linear-gradient(135deg, #6366f1, #a855f7); padding: 1.5rem; border-radius: 1rem; text-align: center;">
-                            <div style="font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.1em; opacity: 0.8;">Identificación</div>
-                            <div style="font-size: 2rem; font-weight: 700; margin: 0.5rem 0;">{fruit_info['fruit_type']}</div>
-                            <div style="font-size: 0.9rem; opacity: 0.7;">Análisis de Forma y Geometría</div>
-                        </div>
-                        """, unsafe_allow_html=True)
-                    
-                    with res_col2:
-                        quality_es = "Fresca" if dl_result['prediction'] == 'Fresh' else "Dañada"
-                        color_grad = "linear-gradient(135deg, #059669, #10b981)" if dl_result['prediction'] == 'Fresh' else "linear-gradient(135deg, #dc2626, #ef4444)"
-                        st.markdown(f"""
-                        <div style="background: {color_grad}; padding: 1.5rem; border-radius: 1rem; text-align: center;">
-                            <div style="font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.1em; opacity: 0.8;">Estado de Calidad</div>
-                            <div style="font-size: 2rem; font-weight: 700; margin: 0.5rem 0;">{quality_es}</div>
-                            <div style="font-size: 0.9rem; opacity: 0.7;">Confianza IA: {dl_result['confidence']*100:.1f}%</div>
-                        </div>
-                        """, unsafe_allow_html=True)
-                    
-                    st.markdown('</div>', unsafe_allow_html=True)
-                    
-                    # Explicación del Motor de Decisión
-                    with st.expander("🎓 ¿Cómo tomó la decisión el sistema?", expanded=False):
-                        st.markdown("""
-                        El 'cerebro' del programa usa un **Motor de Puntuación Híbrido**:
-                        1. **Filtro de Forma:** Primero revisa si la forma es 'larga' o 'redonda'. Si es muy redonda, le prohíbe ser banana.
-                        2. **Votación por Color:** Luego suma puntos si el color de la fruta coincide con los patrones guardados (Naranja, Rojo, Amarillo).
-                        3. **Consenso:** La fruta con más puntos gana. La confianza (%) indica qué tan lejos estuvo el primer lugar del segundo.
+                    method_info = "Sin segmentación"
+                else:
+                    try:
+                        if seg_method == "GrabCut":
+                            seg_result = segment_image(image_np, method="grabcut", iterations=iterations, margin=margin)
+                        else:
+                            seg_result = segment_image(image_np, method="hsv", kernel_size=kernel_size)
                         
-                        *Este método es lo que en IA llamamos un 'Sistemas Basado en Reglas y Lógica Borrosa (Fuzzy Logic)'.*
-                        """)
+                        segmented = seg_result['segmented']
+                        mask = seg_result['mask']
+                        method_info = seg_result['method_info']
+                    except Exception as e:
+                        st.error(f"Error: {e}")
+                        segmented = image_np
+                        mask = np.ones(image_np.shape[:2], dtype=np.uint8) * 255
+                        method_info = "Fallback"
 
-                    # Tabla de probabilidades de calidad
-                    with st.expander("📊 Detalles del Sistema de Puntuación (Reconocedor)"):
-                        st.write("El reconocedor asigna puntos basados en descriptores de forma y cobertura de color:")
-                        
-                        st.markdown(f"""
-                        **Análisis Geométrico:**
-                        - Rel. Aspecto (Rotada): `{features['relación_aspecto_rotada']:.2f}` (Banana > 1.6)
-                        - Circularidad: `{features['circularidad']:.2f}` (Naranja > 0.8)
-                        - Solidez: `{features['solidez']:.2f}`
-                        """)
-                        
-                        for fruit, score in fruit_info['all_scores'].items():
-                            st.progress(max(0, min(score/6.0, 1.0)), text=f"{fruit}: {score:.1f} pts")
-                        st.info("Un puntaje alto en forma alargada favorece a la Banana. La cobertura de color se mide comparando los píxeles con el rango patrón HSV de cada fruta.")
+            # Extraer descriptores y obtener máscara refinada académica
+            features = extract_features(image_np, mask)
+            viz_mask = features.get('refined_mask', mask) if features else mask
 
-                    with st.expander("🧠 Probabilidades del Modelo Neuronal (Calidad)"):
-                        st.json(dl_result['probabilities'])
+            if seg_method == "HSV + Morfología":
+                # --- PIPELINE HSV ---
+                hsv_tabs = st.tabs(["1. 🧪 Canales Color", "2. 🧬 Máscaras", "3. 🧼 Morfología", "4. 📊 Datos Finales"])
+                
+                with hsv_tabs[0]:
+                    st.markdown('<div class="tech-header">ANÁLISIS DE CANALES (HSV)</div>', unsafe_allow_html=True)
+                    st.markdown('<div class="info-block">Descomponemos la luz: <b>H</b> (Tono), <b>S</b> (Saturación), <b>V</b> (Brillo). Observa cómo el canal S suele resaltar mejor la fruta.</div>', unsafe_allow_html=True)
+                    channels = get_hsv_channels(image_np)
+                    c1, c2, c3 = st.columns(3)
+                    c1.image(channels['H'], caption="H: Qué color es", use_container_width=True)
+                    c2.image(channels['S'], caption="S: Qué tan puro es", use_container_width=True)
+                    c3.image(channels['V'], caption="V: Cuánta luz tiene", use_container_width=True)
+
+                with hsv_tabs[1]:
+                    st.markdown('<div class="tech-header">GENERACIÓN DE MÁSCARAS</div>', unsafe_allow_html=True)
+                    st.markdown('<div class="info-block">Creamos dos "moldes": uno basado en la forma (Otsu) y otro en el color específico de la fruta.</div>', unsafe_allow_html=True)
                     
-                    # Guardar
-                    output_dir = PROJECT_ROOT / "outputs" / "streamlit_samples"
-                    save_evaluation(image_np, segmented, dl_result, fruit_info['fruit_type'], seg_method, str(output_dir))
+                    # Simulación visual de pasos HSV
+                    hsv_img = cv2.cvtColor(image_np, cv2.COLOR_RGB2HSV)
+                    # Otsu
+                    _, otsu_m = cv2.threshold(hsv_img[:,:,1], 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+                    c1, c2 = st.columns(2)
+                    c1.image(otsu_m, caption="Máscara de Forma (Otsu en S)", use_container_width=True)
+                    c2.image(seg_result.get('mask', mask), caption="Máscara Combinada Final", use_container_width=True)
+
+                with hsv_tabs[2]:
+                    st.markdown('<div class="tech-header">REFINAMIENTO (MORFOLOGÍA)</div>', unsafe_allow_html=True)
+                    st.markdown('<div class="info-block">Usamos operaciones matemáticas (Erosión/Dilatación) para limpiar ruido (puntitos blancos) y cerrar huecos negros dentro de la fruta.</div>', unsafe_allow_html=True)
+                    c1, c2 = st.columns(2)
+                    c1.image(seg_result.get('mask', mask), caption="Máscara Limpia", use_container_width=True)
+                    c2.image(seg_result.get('segmented', segmented), caption="Fruta Recortada", use_container_width=True)
+
+                with hsv_tabs[3]:
+                    st.markdown('<div class="tech-header">RESULTADOS ANALÍTICOS</div>', unsafe_allow_html=True)
+                    if features:
+                        c1, c2 = st.columns([1,1])
+                        with c1:
+                            st.image(seg_result.get('segmented', segmented), caption="Final para Clasificación", width=300)
+                        with c2:
+                            st.markdown("#### Métricas")
+                            st.write(f"- **Área**: {features['área']:.0f} px")
+                            st.write(f"- **Circularidad**: {features['circularidad']:.2f}")
+
+            elif seg_method == "GrabCut":
+                # --- PIPELINE GRABCUT ---
+                gc_tabs = st.tabs(["1. 📦 Inicialización", "2. ⚙️ Proceso Iterativo", "3. 🍎 Resultado", "4. 📊 Datos"])
+                
+                with gc_tabs[0]:
+                    st.markdown('<div class="tech-header">DEFINICIÓN DE REGIÓN (ROI)</div>', unsafe_allow_html=True)
+                    st.markdown('<div class="info-block">GrabCut necesita una pista inicial: un rectángulo donde <b>probablemente</b> está la fruta. Todo lo de afuera es 100% fondo.</div>', unsafe_allow_html=True)
+                    
+                    # Dibujar rectángulo simulado
+                    viz_rect = image_np.copy()
+                    h, w = viz_rect.shape[:2]
+                    m = margin
+                    cv2.rectangle(viz_rect, (m, m), (w-2*m, h-2*m), (255, 0, 0), 3)
+                    st.image(viz_rect, caption=f"Rectángulo Inicial (Margen {margin}px)", use_container_width=True)
+
+                with gc_tabs[1]:
+                    st.markdown('<div class="tech-header">MODELADO GAUSSIANO (GMM)</div>', unsafe_allow_html=True)
+                    st.markdown(f'<div class="info-block">El algoritmo ejecuta <b>{iterations} iteraciones</b>. En cada paso, construye un modelo de color para el "Fondo" y otro para el "Frente", refinando el borde píxel a píxel.</div>', unsafe_allow_html=True)
+                    st.image(seg_result.get('mask', mask), caption="Máscara de Probabilidad Resultante", use_container_width=True)
+
+                with gc_tabs[2]:
+                    st.markdown('<div class="tech-header">EXTRACCIÓN FINAL</div>', unsafe_allow_html=True)
+                    st.image(seg_result.get('segmented', segmented), caption="Objeto Aislado", use_container_width=True)
+                    
+                with gc_tabs[3]:
+                    st.markdown('<div class="tech-header">ANÁLISIS GEOMÉTRICO</div>', unsafe_allow_html=True)
+                    if features:
+                        st.dataframe(features)
+
             else:
-                st.error("Modelo no cargado. Verifica 'models/fruit_quality_baseline.pth'")
-                
-                st.markdown(f"<p style='text-align:center; color:var(--text-dim);'>Imagen procesada lista para el modelo <b>MobileNetV2</b></p>", unsafe_allow_html=True)
-            
+                st.image(image_np, caption="Imagen Original (Sin Segmentación)")
+
+            # Sección común de Descriptores detallados (siempre útil)
+            st.markdown("---")
+            st.markdown('<div class="tech-header">🔬 REPORTE DETALLADO DE FORMA Y COLOR</div>', unsafe_allow_html=True)
+            if features:
+                c_tab1, c_tab2 = st.columns([1.5, 1])
+                with c_tab1:
+                    data = {
+                        "Atributo": ["📏 Área", "📉 Perímetro", "🖼️ Aspecto", "⭕ Circularidad", "💎 Solidez"],
+                        "Valor": [
+                            f"{features['área']:.0f} px²",
+                            f"{features['perímetro']:.1f} px",
+                            f"{features['relación_aspecto_rotada']:.2f}",
+                            f"{features['circularidad']:.4f}",
+                            f"{features['solidez']:.4f}"
+                        ]
+                    }
+                    st.table(data)
+                with c_tab2:
+                    st.markdown("##### Cobertura Color")
+                    for fruit, coverage in features['color_coverage'].items():
+                        val = coverage * 100
+                        color = "#10b981" if val > 30 else "#f59e0b" if val > 10 else "#6b7280"
+                        st.markdown(f"<span style='color:{color}; font-weight:bold;'>{fruit}: {val:.1f}%</span>", unsafe_allow_html=True)
+
+            # RECONOCEDOR
+            st.markdown("---")
+            if st.button("🚀 Ejecutar Reconocedor (Clasificador)", type="primary", use_container_width=True):
+                if model_available:
+                    with st.spinner("Analizando calidad y forma..."):
+                        # Inferencia de Deep Learning (Calidad)
+                        model, device, info = load_classification_model()
+                        dl_result = predict_quality(model, segmented, device)
+                        
+                        # Análisis de Forma (Tipo de Fruta)
+                        fruit_info = detect_fruit_type_improved(features)
+                        
+                        # Mostrar Resultado Final
+                        st.markdown('<div class="verdict-card">', unsafe_allow_html=True)
+                        st.markdown('<div class="section-title">🏆 Veredicto de Spectra</div>', unsafe_allow_html=True)
+                        
+                        res_col1, res_col2 = st.columns(2)
+                        
+                        with res_col1:
+                            st.markdown(f"""
+                            <div style="background: linear-gradient(135deg, #6366f1, #a855f7); padding: 1.5rem; border-radius: 1rem; text-align: center;">
+                                <div style="font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.1em; opacity: 0.8;">Identificación</div>
+                                <div style="font-size: 2rem; font-weight: 700; margin: 0.5rem 0;">{fruit_info['fruit_type']}</div>
+                                <div style="font-size: 0.9rem; opacity: 0.7;">Análisis de Forma y Geometría</div>
+                            </div>
+                            """, unsafe_allow_html=True)
+                        
+                        with res_col2:
+                            quality_es = "Fresca" if dl_result['prediction'] == 'Fresh' else "Dañada"
+                            color_grad = "linear-gradient(135deg, #059669, #10b981)" if dl_result['prediction'] == 'Fresh' else "linear-gradient(135deg, #dc2626, #ef4444)"
+                            st.markdown(f"""
+                            <div style="background: {color_grad}; padding: 1.5rem; border-radius: 1rem; text-align: center;">
+                                <div style="font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.1em; opacity: 0.8;">Estado de Calidad</div>
+                                <div style="font-size: 2rem; font-weight: 700; margin: 0.5rem 0;">{quality_es}</div>
+                                <div style="font-size: 0.9rem; opacity: 0.7;">Confianza IA: {dl_result['confidence']*100:.1f}%</div>
+                            </div>
+                            """, unsafe_allow_html=True)
+                        
+                        st.markdown('</div>', unsafe_allow_html=True)
+                        
+                        # Explicación del Motor de Decisión
+                        with st.expander("🎓 ¿Cómo tomó la decisión el sistema?", expanded=False):
+                            st.markdown("""
+                            El 'cerebro' del programa usa un **Motor de Puntuación Híbrido**:
+                            1. **Filtro de Forma:** Primero revisa si la forma es 'larga' o 'redonda'. Si es muy redonda, le prohíbe ser banana.
+                            2. **Votación por Color:** Luego suma puntos si el color de la fruta coincide con los patrones guardados (Naranja, Rojo, Amarillo).
+                            3. **Consenso:** La fruta con más puntos gana. La confianza (%) indica qué tan lejos estuvo el primer lugar del segundo.
+                            
+                            *Este método es lo que en IA llamamos un 'Sistemas Basado en Reglas y Lógica Borrosa (Fuzzy Logic)'.*
+                            """)
+
+                        # Tabla de probabilidades de calidad
+                        with st.expander("📊 Detalles del Sistema de Puntuación (Reconocedor)"):
+                            st.write("El reconocedor asigna puntos basados en descriptores de forma y cobertura de color:")
+                            
+                            st.markdown(f"""
+                            **Análisis Geométrico:**
+                            - Rel. Aspecto (Rotada): `{features['relación_aspecto_rotada']:.2f}` (Banana > 1.6)
+                            - Circularidad: `{features['circularidad']:.2f}` (Naranja > 0.8)
+                            - Solidez: `{features['solidez']:.2f}`
+                            """)
+                            
+                            for fruit, score in fruit_info['all_scores'].items():
+                                st.progress(max(0, min(score/6.0, 1.0)), text=f"{fruit}: {score:.1f} pts")
+                            st.info("Un puntaje alto en forma alargada favorece a la Banana. La cobertura de color se mide comparando los píxeles con el rango patrón HSV de cada fruta.")
+
+                        with st.expander("🧠 Probabilidades del Modelo Neuronal (Calidad)"):
+                            st.json(dl_result['probabilities'])
+                        
+                        # Guardar
+                        output_dir = PROJECT_ROOT / "outputs" / "streamlit_samples"
+                        save_evaluation(image_np, segmented, dl_result, fruit_info['fruit_type'], seg_method, str(output_dir))
+                else:
+                    st.error("Modelo no cargado. Verifica 'models/fruit_quality_baseline.pth'")
+                    st.markdown(f"<p style='text-align:center; color:var(--text-dim);'>Imagen procesada lista para el modelo <b>MobileNetV2</b></p>", unsafe_allow_html=True)
+    
     else:
-            st.info("👈 Esperando imagen para iniciar el proceso académico...")
-            st.markdown("""
-            ### Flujo Académico Implementado:
-            1. **Segmentación Parcial**:
-               - **Discontinuidad**: Usamos Canny para encontrar bordes.
-               - **Similaridad**: Usamos máquinas de color (HSV) para agrupar píxeles.
-            2. **Segmentación Completa**: Algoritmo GrabCut o HSV con morfología para aislar el objeto.
-            3. **Extracción de Características**:
-               - Calculamos descriptores de **Forma** (Área, Perímetro, Aspecto, Circularidad).
-               - Extraemos descriptores de **Color** (Promedio RGB).
-            4. **Descripción**: Generamos un vector de características del objeto.
-            5. **Reconocedor**: Un sistema híbrido (Heurísticas de forma + Deep Learning) toma la decisión final.
-            """)
+        st.info("👈 Esperando imagen para iniciar el proceso académico...")
+        st.markdown("""
+        ### Flujo Académico Implementado:
+        1. **Segmentación Parcial**:
+           - **Discontinuidad**: Usamos Canny para encontrar bordes.
+           - **Similaridad**: Usamos máquinas de color (HSV) para agrupar píxeles.
+        2. **Segmentación Completa**: Algoritmo GrabCut o HSV con morfología para aislar el objeto.
+        3. **Extracción de Características**:
+           - Calculamos descriptores de **Forma** (Área, Perímetro, Aspecto, Circularidad).
+           - Extraemos descriptores de **Color** (Promedio RGB).
+        4. **Descripción**: Generamos un vector de características del objeto.
+        5. **Reconocedor**: Un sistema híbrido (Heurísticas de forma + Deep Learning) toma la decisión final.
+        """)
 
     # Footer
     st.markdown("---")
